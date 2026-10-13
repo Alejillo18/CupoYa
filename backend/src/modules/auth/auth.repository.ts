@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 export interface UserRecord {
   id: string;
@@ -12,6 +12,13 @@ export interface UserRepository {
   create(data: { email: string; passwordHash: string }): Promise<UserRecord>;
 }
 
+export class EmailAlreadyExistsError extends Error {
+  constructor() {
+    super('El email ya existe');
+    this.name = 'EmailAlreadyExistsError';
+  }
+}
+
 export class PrismaUserRepository implements UserRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -20,6 +27,13 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async create(data: { email: string; passwordHash: string }): Promise<UserRecord> {
-    return this.prisma.user.create({ data });
+    try {
+      return await this.prisma.user.create({ data });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new EmailAlreadyExistsError();
+      }
+      throw err;
+    }
   }
 }

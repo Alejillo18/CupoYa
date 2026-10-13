@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { AppError } from '../../errors/AppError';
-import { UserRepository } from './auth.repository';
+import { EmailAlreadyExistsError, UserRepository } from './auth.repository';
 
 const BCRYPT_ROUNDS = 10;
 
@@ -22,8 +22,15 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    const user = await this.users.create({ email: normalizedEmail, passwordHash });
 
-    return { id: user.id, email: user.email, role: user.role };
+    try {
+      const user = await this.users.create({ email: normalizedEmail, passwordHash });
+      return { id: user.id, email: user.email, role: user.role };
+    } catch (err) {
+      if (err instanceof EmailAlreadyExistsError) {
+        throw new AppError(409, 'EMAIL_YA_REGISTRADO', 'Ya existe una cuenta con ese email.');
+      }
+      throw err;
+    }
   }
 }

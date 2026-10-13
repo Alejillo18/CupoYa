@@ -1,5 +1,6 @@
 import { AuthService } from '../../src/modules/auth/auth.service';
 import { UserRepository, UserRecord } from '../../src/modules/auth/auth.repository';
+import { EmailAlreadyExistsError } from '../../src/modules/auth/auth.repository';
 import bcrypt from 'bcryptjs';
 
 class FakeUserRepository implements UserRepository {
@@ -64,5 +65,21 @@ describe('AuthService.register', () => {
     await service.register('  Ana@Mail.COM ', 'Clave1234');
 
     expect(repo.users[0].email).toBe('ana@mail.com');
+  });
+});
+describe('AuthService.register (carrera por email duplicado)', () => {
+  it('traduce el error de unicidad de la base a 409', async () => {
+    const racingRepo: UserRepository = {
+      findByEmail: async () => null,
+      create: async () => {
+        throw new EmailAlreadyExistsError();
+      },
+    };
+    const service = new AuthService(racingRepo);
+
+    await expect(service.register('ana@mail.com', 'Clave1234')).rejects.toMatchObject({
+      status: 409,
+      code: 'EMAIL_YA_REGISTRADO',
+    });
   });
 });
