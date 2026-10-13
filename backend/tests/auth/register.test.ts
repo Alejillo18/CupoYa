@@ -3,12 +3,12 @@ import { createApp } from '../../src/app';
 import { AuthService } from '../../src/modules/auth/auth.service';
 import { TokenService } from '../../src/modules/auth/token.service';
 import { FakeUserRepository } from '../helpers/fakeUserRepository';
-import { buildAuthService } from '../helpers/buildAuthService';
+import { buildAuthService, testTokens } from '../helpers/buildAuthService';
 
 
 function buildApp() {
   const { service, users } = buildAuthService();
-  const app = createApp({ authService: service });
+  const app = createApp({ authService: service, tokens: testTokens })
   return { app, repo: users as FakeUserRepository };
 }
 

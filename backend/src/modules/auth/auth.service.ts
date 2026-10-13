@@ -108,4 +108,11 @@ export class AuthService {
   async logout(refreshToken: string): Promise<void> {
     await this.refreshTokens.revoke(refreshToken);
   }
+  async me(userId: string): Promise<PublicUser> {
+    const user = await this.users.findById(userId);
+    if (!user) {
+      throw new AppError(401, 'NO_AUTENTICADO', 'Necesitás iniciar sesión para acceder.');
+    }
+    return { id: user.id, email: user.email, role: user.role };
+  }
 }

@@ -1,11 +1,11 @@
 import request from 'supertest';
 import { createApp } from '../../src/app';
-import { buildAuthService } from '../helpers/buildAuthService';
+import { buildAuthService, testTokens } from '../helpers/buildAuthService';
 
 async function setup() {
   const { service } = buildAuthService();
   await service.register('ana@mail.com', 'Clave1234');
-  return createApp({ authService: service });
+  return createApp({ authService: service, tokens: testTokens })
 }
 
 function cookieDe(res: request.Response): string {

@@ -256,3 +256,31 @@ describe('AuthService: sesión con refresh token', () => {
     await expect(service.refresh(login.refreshToken)).rejects.toMatchObject({ status: 401 });
   });
 });
+
+describe('AuthService.me', () => {
+  it('devuelve el usuario actual sin el hash', async () => {
+    const { service } = buildAuthService();
+    const registrado = await service.register('ana@mail.com', 'Clave1234');
+
+    const me = await service.me(registrado.id);
+
+    expect(me).toEqual({ id: registrado.id, email: 'ana@mail.com', role: 'USUARIO' });
+  });
+
+  it('refleja el rol vigente en la base', async () => {
+    const { service, users } = buildAuthService();
+    const registrado = await service.register('ana@mail.com', 'Clave1234');
+    (users as FakeUserRepository).users[0].role = 'ADMIN';
+
+    expect((await service.me(registrado.id)).role).toBe('ADMIN');
+  });
+
+  it('si el usuario no existe devuelve 401', async () => {
+    const { service } = buildAuthService();
+
+    await expect(service.me('no-existe')).rejects.toMatchObject({
+      status: 401,
+      code: 'NO_AUTENTICADO',
+    });
+  });
+});

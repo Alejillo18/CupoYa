@@ -3,6 +3,8 @@ import { AppError } from '../../errors/AppError';
 import { validateBody } from '../../middlewares/validate';
 import { AuthService } from './auth.service';
 import { loginSchema, registerSchema } from './auth.schemas';
+import { authenticate } from '../../middlewares/auth';
+import { TokenService } from './token.service';
 
 const COOKIE_NAME = 'refresh_token';
 const COOKIE_PATH = '/api/v1/auth';
@@ -10,9 +12,10 @@ const REFRESH_DAYS = 7;
 
 export interface AuthRoutesOptions {
   cookieSecure?: boolean;
+  tokens: TokenService;
 }
 
-export function authRoutes(authService: AuthService, options: AuthRoutesOptions = {}): Router {
+export function authRoutes(authService: AuthService, options: AuthRoutesOptions): Router {
   const router = Router();
 
   const baseCookie: CookieOptions = {
@@ -75,6 +78,14 @@ export function authRoutes(authService: AuthService, options: AuthRoutesOptions 
       if (token) await authService.logout(token);
       clearRefreshCookie(res);
       res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.get('/me', authenticate(options.tokens), async (req, res, next) => {
+    try {
+      const user = await authService.me(req.auth!.userId);
+      res.status(200).json({ user });
     } catch (err) {
       next(err);
     }

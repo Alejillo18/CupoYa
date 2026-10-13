@@ -20,6 +20,10 @@ const refreshTokens = new RefreshTokenService(
 );
 const authService = new AuthService(new PrismaUserRepository(prisma), tokens, refreshTokens);
 
-createApp({ authService, cookieSecure: process.env.COOKIE_SECURE === 'true' }).listen(port, () => {
+createApp({
+  authService,
+  tokens,
+  cookieSecure: process.env.COOKIE_SECURE === 'true',
+}).listen(port, () => {
   console.log(`CupoYa backend escuchando en el puerto ${port}`);
 });

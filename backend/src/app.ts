@@ -3,9 +3,11 @@ import express, { Application } from 'express';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 import { AuthService } from './modules/auth/auth.service';
 import { authRoutes } from './modules/auth/auth.routes';
+import { TokenService } from './modules/auth/token.service';
 
 export interface AppDependencies {
   authService?: AuthService;
+  tokens?: TokenService;
   cookieSecure?: boolean;
 }
 
@@ -19,8 +21,11 @@ export function createApp(deps: AppDependencies = {}): Application {
     res.status(200).json({ status: 'ok' });
   });
 
-  if (deps.authService) {
-    app.use('/api/v1/auth', authRoutes(deps.authService, { cookieSecure: deps.cookieSecure }));
+  if (deps.authService && deps.tokens) {
+    app.use(
+      '/api/v1/auth',
+      authRoutes(deps.authService, { cookieSecure: deps.cookieSecure, tokens: deps.tokens }),
+    );
   }
 
   app.use(notFoundHandler);
