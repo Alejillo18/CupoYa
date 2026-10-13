@@ -11,6 +11,7 @@ export interface UserRecord {
 
 export interface UserRepository {
   findByEmail(email: string): Promise<UserRecord | null>;
+  findById(id: string): Promise<UserRecord | null>;
   create(data: { email: string; passwordHash: string }): Promise<UserRecord>;
   registerFailedLogin(id: string, maxAttempts: number, lockUntil: Date): Promise<void>;
   resetFailedLogins(id: string): Promise<void>;
@@ -28,6 +29,9 @@ export class PrismaUserRepository implements UserRepository {
 
   async findByEmail(email: string): Promise<UserRecord | null> {
     return this.prisma.user.findUnique({ where: { email } });
+  }
+  async findById(id: string): Promise<UserRecord | null> {
+    return this.prisma.user.findUnique({ where: { id } });
   }
 
   async create(data: { email: string; passwordHash: string }): Promise<UserRecord> {

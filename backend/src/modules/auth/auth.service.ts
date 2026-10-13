@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { AppError } from '../../errors/AppError';
 import { EmailAlreadyExistsError, UserRepository } from './auth.repository';
 import { RoleName, TokenService } from './token.service';
+import { RefreshTokenService } from './refreshToken.service';
 
 const BCRYPT_ROUNDS = 10;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -16,6 +17,12 @@ export interface PublicUser {
 export interface LoginResult {
   user: PublicUser;
   accessToken: string;
+  refreshToken: string;
+}
+
+export interface RefreshResult {
+  accessToken: string;
+  refreshToken: string;
 }
 
 const DUMMY_HASH = bcrypt.hashSync('contraseña-que-nadie-conoce', BCRYPT_ROUNDS);
@@ -24,6 +31,7 @@ export class AuthService {
   constructor(
     private readonly users: UserRepository,
     private readonly tokens: TokenService,
+    private readonly refreshTokens: RefreshTokenService,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -74,9 +82,30 @@ export class AuthService {
       await this.users.resetFailedLogins(user.id);
     }
 
+    const { token: refreshToken } = await this.refreshTokens.issue(user.id);
+
     return {
       user: { id: user.id, email: user.email, role: user.role },
       accessToken: this.tokens.signAccessToken({ id: user.id, role: user.role }),
+      refreshToken,
     };
+  }
+  async refresh(refreshToken: string): Promise<RefreshResult> {
+    const rotated = await this.refreshTokens.rotate(refreshToken);
+
+    const user = await this.users.findById(rotated.userId);
+    if (!user) {
+      await this.refreshTokens.revoke(rotated.token);
+      throw new AppError(401, 'REFRESH_INVALIDO', 'La sesión no es válida. Iniciá sesión de nuevo.');
+    }
+
+    return {
+      accessToken: this.tokens.signAccessToken({ id: user.id, role: user.role }),
+      refreshToken: rotated.token,
+    };
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    await this.refreshTokens.revoke(refreshToken);
   }
 }
