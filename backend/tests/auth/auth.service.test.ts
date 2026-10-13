@@ -1,6 +1,7 @@
 import { AuthService } from '../../src/modules/auth/auth.service';
 import { UserRepository, UserRecord } from '../../src/modules/auth/auth.repository';
 import { EmailAlreadyExistsError } from '../../src/modules/auth/auth.repository';
+import { TokenService } from '../../src/modules/auth/token.service';
 import bcrypt from 'bcryptjs';
 
 class FakeUserRepository implements UserRepository {
@@ -28,7 +29,7 @@ describe('AuthService.register', () => {
 
   beforeEach(() => {
     repo = new FakeUserRepository();
-    service = new AuthService(repo);
+    service = new AuthService(repo, new TokenService('secreto-de-prueba-con-largo-suficiente', 900));
   });
 
   it('crea el usuario con rol USUARIO', async () => {
@@ -75,11 +76,68 @@ describe('AuthService.register (carrera por email duplicado)', () => {
         throw new EmailAlreadyExistsError();
       },
     };
-    const service = new AuthService(racingRepo);
+    const service = new AuthService(
+      racingRepo,
+      new TokenService('secreto-de-prueba-con-largo-suficiente', 900),
+    );
 
     await expect(service.register('ana@mail.com', 'Clave1234')).rejects.toMatchObject({
       status: 409,
       code: 'EMAIL_YA_REGISTRADO',
+    });
+  });
+});
+describe('AuthService.login', () => {
+  let repo: FakeUserRepository;
+  let service: AuthService;
+  const tokens = new TokenService('secreto-de-prueba-con-largo-suficiente', 900);
+
+  beforeEach(async () => {
+    repo = new FakeUserRepository();
+    service = new AuthService(repo, tokens);
+    await service.register('ana@mail.com', 'Clave1234');
+  });
+
+  it('con credenciales válidas devuelve usuario y access token', async () => {
+    const result = await service.login('ana@mail.com', 'Clave1234');
+
+    expect(result.user.email).toBe('ana@mail.com');
+    expect(tokens.verifyAccessToken(result.accessToken).sub).toBe(result.user.id);
+  });
+
+  it('el resultado no incluye el hash', async () => {
+    const result = await service.login('ana@mail.com', 'Clave1234');
+
+    expect(JSON.stringify(result)).not.toContain('passwordHash');
+  });
+
+  it('acepta el email con mayúsculas y espacios', async () => {
+    const result = await service.login('  ANA@mail.com ', 'Clave1234');
+
+    expect(result.user.email).toBe('ana@mail.com');
+  });
+
+  it('contraseña incorrecta devuelve 401 genérico', async () => {
+    await expect(service.login('ana@mail.com', 'Equivocada1')).rejects.toMatchObject({
+      status: 401,
+      code: 'CREDENCIALES_INVALIDAS',
+    });
+  });
+
+  it('email inexistente devuelve exactamente el mismo 401', async () => {
+    await expect(service.login('nadie@mail.com', 'Clave1234')).rejects.toMatchObject({
+      status: 401,
+      code: 'CREDENCIALES_INVALIDAS',
+      message: 'Email o contraseña incorrectos.',
+    });
+  });
+
+  it('una cuenta sin contraseña (solo Google) no puede entrar con clave', async () => {
+    repo.users.push({ id: 'g1', email: 'goog@mail.com', passwordHash: null, role: 'USUARIO' });
+
+    await expect(service.login('goog@mail.com', 'Clave1234')).rejects.toMatchObject({
+      status: 401,
+      code: 'CREDENCIALES_INVALIDAS',
     });
   });
 });

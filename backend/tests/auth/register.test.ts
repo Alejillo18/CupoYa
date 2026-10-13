@@ -2,6 +2,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app';
 import { AuthService } from '../../src/modules/auth/auth.service';
 import { UserRepository, UserRecord } from '../../src/modules/auth/auth.repository';
+import { TokenService } from '../../src/modules/auth/token.service';
 
 class FakeUserRepository implements UserRepository {
   users: UserRecord[] = [];
@@ -22,7 +23,9 @@ class FakeUserRepository implements UserRepository {
 
 function buildApp() {
   const repo = new FakeUserRepository();
-  const app = createApp({ authService: new AuthService(repo) });
+  const app = createApp({
+    authService: new AuthService(repo, new TokenService('secreto-de-prueba-con-largo-suficiente', 900)),
+  });
   return { app, repo };
 }
 
