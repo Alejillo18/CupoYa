@@ -3,25 +3,7 @@ import { UserRepository, UserRecord } from '../../src/modules/auth/auth.reposito
 import { EmailAlreadyExistsError } from '../../src/modules/auth/auth.repository';
 import { TokenService } from '../../src/modules/auth/token.service';
 import bcrypt from 'bcryptjs';
-
-class FakeUserRepository implements UserRepository {
-  users: UserRecord[] = [];
-
-  async findByEmail(email: string) {
-    return this.users.find((u) => u.email === email) ?? null;
-  }
-
-  async create(data: { email: string; passwordHash: string }) {
-    const user: UserRecord = {
-      id: `id-${this.users.length + 1}`,
-      email: data.email,
-      passwordHash: data.passwordHash,
-      role: 'USUARIO',
-    };
-    this.users.push(user);
-    return user;
-  }
-}
+import { FakeUserRepository } from '../helpers/fakeUserRepository';
 
 describe('AuthService.register', () => {
   let repo: FakeUserRepository;
@@ -75,6 +57,8 @@ describe('AuthService.register (carrera por email duplicado)', () => {
       create: async () => {
         throw new EmailAlreadyExistsError();
       },
+      registerFailedLogin: async () => {},
+      resetFailedLogins: async () => {},
     };
     const service = new AuthService(
       racingRepo,
@@ -133,9 +117,87 @@ describe('AuthService.login', () => {
   });
 
   it('una cuenta sin contraseña (solo Google) no puede entrar con clave', async () => {
-    repo.users.push({ id: 'g1', email: 'goog@mail.com', passwordHash: null, role: 'USUARIO' });
+    repo.users.push({
+      id: 'g1',
+      email: 'goog@mail.com',
+      passwordHash: null,
+      role: 'USUARIO',
+      failedAttempts: 0,
+      lockedUntil: null,
+    });
 
     await expect(service.login('goog@mail.com', 'Clave1234')).rejects.toMatchObject({
+      status: 401,
+      code: 'CREDENCIALES_INVALIDAS',
+    });
+  });
+});
+
+describe('AuthService.login (bloqueo por intentos fallidos)', () => {
+  let repo: FakeUserRepository;
+  let service: AuthService;
+  let ahora: Date;
+  const tokens = new TokenService('secreto-de-prueba-con-largo-suficiente', 900);
+
+  beforeEach(async () => {
+    repo = new FakeUserRepository();
+    ahora = new Date('2026-10-13T12:00:00Z');
+    service = new AuthService(repo, tokens, () => ahora);
+    await service.register('ana@mail.com', 'Clave1234');
+  });
+
+  async function fallar(veces: number) {
+    for (let i = 0; i < veces; i++) {
+      await expect(service.login('ana@mail.com', 'Mala12345')).rejects.toMatchObject({
+        status: 401,
+      });
+    }
+  }
+
+  it('los primeros 4 fallos devuelven 401 y no bloquean', async () => {
+    await fallar(4);
+
+    const result = await service.login('ana@mail.com', 'Clave1234');
+    expect(result.user.email).toBe('ana@mail.com');
+  });
+
+  it('el 5.º fallo seguido bloquea la cuenta: el siguiente intento devuelve 423', async () => {
+    await fallar(5);
+
+    await expect(service.login('ana@mail.com', 'Clave1234')).rejects.toMatchObject({
+      status: 423,
+      code: 'CUENTA_BLOQUEADA',
+    });
+  });
+
+  it('mientras está bloqueada, ni la clave correcta entra', async () => {
+    await fallar(5);
+    ahora = new Date(ahora.getTime() + 14 * 60 * 1000);
+
+    await expect(service.login('ana@mail.com', 'Clave1234')).rejects.toMatchObject({
+      status: 423,
+    });
+  });
+
+  it('pasados 15 minutos el bloqueo termina', async () => {
+    await fallar(5);
+    ahora = new Date(ahora.getTime() + 15 * 60 * 1000 + 1000);
+
+    const result = await service.login('ana@mail.com', 'Clave1234');
+    expect(result.user.email).toBe('ana@mail.com');
+  });
+
+  it('un login exitoso reinicia el contador', async () => {
+    await fallar(4);
+    await service.login('ana@mail.com', 'Clave1234');
+    await fallar(4);
+
+    const result = await service.login('ana@mail.com', 'Clave1234');
+    expect(result.user.email).toBe('ana@mail.com');
+  });
+
+  it('un email inexistente sigue dando el mismo 401 (sin bloqueo)', async () => {
+    await expect(service.login('nadie@mail.com', 'Mala12345')).rejects.toMatchObject({
       status: 401,
       code: 'CREDENCIALES_INVALIDAS',
     });

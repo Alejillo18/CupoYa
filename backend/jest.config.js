@@ -1,6 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
+  testPathIgnorePatterns: ['/integration/'],
   collectCoverageFrom: ['src/**/*.ts', '!src/server.ts'],
   transform: {
     '^.+\\.ts$': [

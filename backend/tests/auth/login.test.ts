@@ -2,24 +2,9 @@ import request from 'supertest';
 import { createApp } from '../../src/app';
 import { AuthService } from '../../src/modules/auth/auth.service';
 import { TokenService } from '../../src/modules/auth/token.service';
-import { UserRepository, UserRecord } from '../../src/modules/auth/auth.repository';
+import { FakeUserRepository } from '../helpers/fakeUserRepository';
 
-class FakeUserRepository implements UserRepository {
-  users: UserRecord[] = [];
-  async findByEmail(email: string) {
-    return this.users.find((u) => u.email === email) ?? null;
-  }
-  async create(data: { email: string; passwordHash: string }) {
-    const user: UserRecord = {
-      id: `id-${this.users.length + 1}`,
-      email: data.email,
-      passwordHash: data.passwordHash,
-      role: 'USUARIO',
-    };
-    this.users.push(user);
-    return user;
-  }
-}
+
 
 const tokens = new TokenService('secreto-de-prueba-con-largo-suficiente', 900);
 

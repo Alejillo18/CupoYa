@@ -4,6 +4,8 @@ import { EmailAlreadyExistsError, UserRepository } from './auth.repository';
 import { RoleName, TokenService } from './token.service';
 
 const BCRYPT_ROUNDS = 10;
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCK_MINUTES = 15;
 
 export interface PublicUser {
   id: string;
@@ -22,6 +24,7 @@ export class AuthService {
   constructor(
     private readonly users: UserRepository,
     private readonly tokens: TokenService,
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   async register(email: string, password: string): Promise<PublicUser> {
@@ -49,12 +52,26 @@ export class AuthService {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.users.findByEmail(normalizedEmail);
 
-    // Siempre se compara contra un hash, exista o no el usuario.
+    if (user?.lockedUntil && user.lockedUntil > this.now()) {
+      throw new AppError(
+        423,
+        'CUENTA_BLOQUEADA',
+        'La cuenta está bloqueada temporalmente por demasiados intentos fallidos. Probá de nuevo más tarde.',
+      );
+    }
     const hashToCheck = user?.passwordHash ?? DUMMY_HASH;
     const passwordOk = await bcrypt.compare(password, hashToCheck);
 
     if (!user || !user.passwordHash || !passwordOk) {
+      if (user) {
+        const lockUntil = new Date(this.now().getTime() + LOCK_MINUTES * 60 * 1000);
+        await this.users.registerFailedLogin(user.id, MAX_FAILED_ATTEMPTS, lockUntil);
+      }
       throw new AppError(401, 'CREDENCIALES_INVALIDAS', 'Email o contraseña incorrectos.');
+    }
+
+    if (user.failedAttempts > 0 || user.lockedUntil) {
+      await this.users.resetFailedLogins(user.id);
     }
 
     return {
