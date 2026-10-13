@@ -4,14 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "dev": "tsx watch --env-file=.env src/server.ts",
-  "build": "tsc -p tsconfig.build.json",
-  "start": "node dist/server.js",
-  "test": "jest",
-  "test:watch": "jest --watch",
-  "test:cov": "jest --coverage",
-  "test:integration": "node --env-file=.env.test node_modules/jest/bin/jest.js --config jest.integration.config.js --runInBand"
-},
+    "dev": "tsx watch --env-file=.env src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "test:integration": "node --env-file=.env.test node_modules/jest/bin/jest.js --config jest.integration.config.js --runInBand"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -19,12 +19,14 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
     "express": "^5.3.0",
     "jsonwebtoken": "^9.0.3",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.10",

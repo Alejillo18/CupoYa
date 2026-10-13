@@ -3,15 +3,16 @@ import { createApp } from '../../src/app';
 import { AuthService } from '../../src/modules/auth/auth.service';
 import { TokenService } from '../../src/modules/auth/token.service';
 import { FakeUserRepository } from '../helpers/fakeUserRepository';
+import { buildAuthService } from '../helpers/buildAuthService';
 
 
 
 const tokens = new TokenService('secreto-de-prueba-con-largo-suficiente', 900);
 
 async function buildApp() {
-  const authService = new AuthService(new FakeUserRepository(), tokens);
-  await authService.register('ana@mail.com', 'Clave1234');
-  return createApp({ authService });
+  const { service } = buildAuthService();
+  await service.register('ana@mail.com', 'Clave1234');
+  return createApp({ authService: service });
 }
 
 describe('POST /api/v1/auth/login', () => {

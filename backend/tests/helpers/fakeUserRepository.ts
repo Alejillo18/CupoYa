@@ -34,4 +34,7 @@ export class FakeUserRepository implements UserRepository {
     u.failedAttempts = 0;
     u.lockedUntil = null;
   }
+  async findById(id: string) {
+    return this.users.find((u) => u.id === id) ?? null;
+  }
 }

@@ -3,14 +3,13 @@ import { createApp } from '../../src/app';
 import { AuthService } from '../../src/modules/auth/auth.service';
 import { TokenService } from '../../src/modules/auth/token.service';
 import { FakeUserRepository } from '../helpers/fakeUserRepository';
+import { buildAuthService } from '../helpers/buildAuthService';
 
 
 function buildApp() {
-  const repo = new FakeUserRepository();
-  const app = createApp({
-    authService: new AuthService(repo, new TokenService('secreto-de-prueba-con-largo-suficiente', 900)),
-  });
-  return { app, repo };
+  const { service, users } = buildAuthService();
+  const app = createApp({ authService: service });
+  return { app, repo: users as FakeUserRepository };
 }
 
 describe('POST /api/v1/auth/register', () => {

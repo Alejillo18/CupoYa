@@ -4,6 +4,9 @@ import { EmailAlreadyExistsError } from '../../src/modules/auth/auth.repository'
 import { TokenService } from '../../src/modules/auth/token.service';
 import bcrypt from 'bcryptjs';
 import { FakeUserRepository } from '../helpers/fakeUserRepository';
+import { RefreshTokenService } from '../../src/modules/auth/refreshToken.service';
+import { FakeRefreshTokenRepository } from '../helpers/fakeRefreshTokenRepository';
+import { buildAuthService, testTokens } from '../helpers/buildAuthService';
 
 describe('AuthService.register', () => {
   let repo: FakeUserRepository;
@@ -11,7 +14,7 @@ describe('AuthService.register', () => {
 
   beforeEach(() => {
     repo = new FakeUserRepository();
-    service = new AuthService(repo, new TokenService('secreto-de-prueba-con-largo-suficiente', 900));
+    service = buildAuthService({ users: repo }).service;
   });
 
   it('crea el usuario con rol USUARIO', async () => {
@@ -54,16 +57,14 @@ describe('AuthService.register (carrera por email duplicado)', () => {
   it('traduce el error de unicidad de la base a 409', async () => {
     const racingRepo: UserRepository = {
       findByEmail: async () => null,
+      findById: async () => null,
       create: async () => {
         throw new EmailAlreadyExistsError();
       },
       registerFailedLogin: async () => {},
       resetFailedLogins: async () => {},
     };
-    const service = new AuthService(
-      racingRepo,
-      new TokenService('secreto-de-prueba-con-largo-suficiente', 900),
-    );
+    const service = buildAuthService({ users: racingRepo }).service;
 
     await expect(service.register('ana@mail.com', 'Clave1234')).rejects.toMatchObject({
       status: 409,
@@ -78,7 +79,7 @@ describe('AuthService.login', () => {
 
   beforeEach(async () => {
     repo = new FakeUserRepository();
-    service = new AuthService(repo, tokens);
+    service = buildAuthService({ users: repo }).service;
     await service.register('ana@mail.com', 'Clave1234');
   });
 
@@ -142,7 +143,7 @@ describe('AuthService.login (bloqueo por intentos fallidos)', () => {
   beforeEach(async () => {
     repo = new FakeUserRepository();
     ahora = new Date('2026-10-13T12:00:00Z');
-    service = new AuthService(repo, tokens, () => ahora);
+    service = buildAuthService({ users: repo, now: () => ahora }).service;
     await service.register('ana@mail.com', 'Clave1234');
   });
 
@@ -201,5 +202,57 @@ describe('AuthService.login (bloqueo por intentos fallidos)', () => {
       status: 401,
       code: 'CREDENCIALES_INVALIDAS',
     });
+  });
+});
+
+describe('AuthService: sesión con refresh token', () => {
+  it('login devuelve también un refresh token', async () => {
+    const { service } = buildAuthService();
+    await service.register('ana@mail.com', 'Clave1234');
+
+    const result = await service.login('ana@mail.com', 'Clave1234');
+
+    expect(result.refreshToken.length).toBeGreaterThanOrEqual(40);
+  });
+
+  it('refresh entrega nuevo access token y nuevo refresh token', async () => {
+    const { service } = buildAuthService();
+    await service.register('ana@mail.com', 'Clave1234');
+    const login = await service.login('ana@mail.com', 'Clave1234');
+
+    const result = await service.refresh(login.refreshToken);
+
+    expect(result.refreshToken).not.toBe(login.refreshToken);
+    expect(testTokens.verifyAccessToken(result.accessToken).sub).toBe(login.user.id);
+  });
+
+  it('refresh con el token anterior (ya rotado) devuelve 401', async () => {
+    const { service } = buildAuthService();
+    await service.register('ana@mail.com', 'Clave1234');
+    const login = await service.login('ana@mail.com', 'Clave1234');
+    await service.refresh(login.refreshToken);
+
+    await expect(service.refresh(login.refreshToken)).rejects.toMatchObject({ status: 401 });
+  });
+
+  it('refresh con el rol actualizado: el nuevo access token refleja el rol vigente', async () => {
+    const { service, users } = buildAuthService();
+    await service.register('ana@mail.com', 'Clave1234');
+    const login = await service.login('ana@mail.com', 'Clave1234');
+    (users as FakeUserRepository).users[0].role = 'OPERADOR';
+
+    const result = await service.refresh(login.refreshToken);
+
+    expect(testTokens.verifyAccessToken(result.accessToken).role).toBe('OPERADOR');
+  });
+
+  it('logout invalida el refresh token', async () => {
+    const { service } = buildAuthService();
+    await service.register('ana@mail.com', 'Clave1234');
+    const login = await service.login('ana@mail.com', 'Clave1234');
+
+    await service.logout(login.refreshToken);
+
+    await expect(service.refresh(login.refreshToken)).rejects.toMatchObject({ status: 401 });
   });
 });
