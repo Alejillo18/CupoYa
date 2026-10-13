@@ -19,7 +19,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/cupoya
     ports:
-      - "3000:3000"
+      - "5432:5432"
     depends_on:
       db:
         condition: service_healthy
