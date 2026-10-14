@@ -5,6 +5,8 @@ services:
       POSTGRES_DB: cupoya
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,8 +20,12 @@ services:
     environment:
       PORT: 3000
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/cupoya
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-900}
+      REFRESH_TTL_DAYS: ${REFRESH_TTL_DAYS:-7}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
-      - "5432:5432"
+      - "3000:3000"
     depends_on:
       db:
         condition: service_healthy
