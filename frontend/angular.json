@@ -18,6 +18,7 @@
           "options": {
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
+            "index": "src/index.html",
             "assets": [
               {
                 "glob": "**/*",
@@ -52,6 +53,9 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.json"
+          },
           "configurations": {
             "production": {
               "buildTarget": "cupoya-web:build:production"
