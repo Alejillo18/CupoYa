@@ -91,4 +91,18 @@ describe('LoginComponent', () => {
     const boton = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(boton.disabled).toBe(true);
   });
+
+  it('muestra el aviso de cuenta creada cuando llega ?registrado=1', () => {
+    const fixture = TestBed.createComponent(LoginComponent);
+    fixture.componentRef.setInput('registrado', '1');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Cuenta creada');
+  });
+
+  it('no muestra el aviso sin el parámetro', () => {
+    const fixture = crear();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Cuenta creada');
+  });
 });

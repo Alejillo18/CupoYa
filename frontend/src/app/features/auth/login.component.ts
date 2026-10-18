@@ -1,7 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { Component, inject, input, signal } from '@angular/core';
 
 @Component({
   selector: 'app-login',
@@ -16,6 +16,7 @@ export class LoginComponent {
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly registrado = input<string | undefined>();
 
   readonly form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],

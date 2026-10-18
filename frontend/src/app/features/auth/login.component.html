@@ -1,5 +1,8 @@
 <main class="auth">
     <h1>Ingresar a CupoYa</h1>
+    @if (registrado() === '1') {
+        <p class="ok" role="status">Cuenta creada. Ya podés ingresar.</p>
+      }
   
     <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <label>

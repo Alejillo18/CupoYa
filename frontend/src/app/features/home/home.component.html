@@ -1,0 +1,8 @@
+<main class="auth">
+    <h1>CupoYa</h1>
+    @if (user(); as u) {
+      <p>Sesión iniciada como <strong>{{ u.email }}</strong></p>
+      <p>Rol: <strong>{{ u.role }}</strong></p>
+    }
+    <button type="button" (click)="logout()">Cerrar sesión</button>
+  </main>
