@@ -49,7 +49,7 @@ export class AuthService {
       .pipe(
         tap((res) => this._accessToken.set(res.accessToken)),
         catchError((err) => {
-          this.clear();
+          this.clearSession();
           return throwError(() => err);
         }),
       );
@@ -59,7 +59,7 @@ export class AuthService {
     return this.http.post<void>(`${API}/logout`, {}, { withCredentials: true }).pipe(
       catchError(() => of(undefined)),
       map(() => undefined),
-      tap(() => this.clear()),
+      tap(() => this.clearSession()),
     );
   }
 
@@ -73,13 +73,13 @@ export class AuthService {
       tap((res) => this._user.set(res.user)),
       map(() => undefined),
       catchError(() => {
-        this.clear();
+        this.clearSession();
         return of(undefined);
       }),
     );
   }
 
-  private clear(): void {
+  clearSession(): void {
     this._accessToken.set(null);
     this._user.set(null);
   }
