@@ -2,7 +2,7 @@ import { CookieOptions, Request, Response, Router } from 'express';
 import { AppError } from '../../errors/AppError';
 import { validateBody } from '../../middlewares/validate';
 import { AuthService } from './auth.service';
-import { loginSchema, registerSchema } from './auth.schemas';
+import { googleSchema, loginSchema, registerSchema } from './auth.schemas';
 import { authenticate } from '../../middlewares/auth';
 import { TokenService } from './token.service';
 
@@ -86,6 +86,15 @@ export function authRoutes(authService: AuthService, options: AuthRoutesOptions)
     try {
       const user = await authService.me(req.auth!.userId);
       res.status(200).json({ user });
+    } catch (err) {
+      next(err);
+    }
+  });
+  router.post('/google', validateBody(googleSchema), async (req, res, next) => {
+    try {
+      const { refreshToken, ...result } = await authService.loginWithGoogle(req.body.idToken);
+      setRefreshCookie(res, refreshToken);
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }
