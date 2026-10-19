@@ -38,3 +38,14 @@
   color: #1b5e20;
   margin: 0 0 0.75rem;
 }
+.separador {
+  text-align: center;
+  color: #666;
+  margin: 1rem 0 0.5rem;
+}
+.google {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}

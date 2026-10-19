@@ -2,10 +2,11 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { Component, inject, input, signal } from '@angular/core';
+import { GoogleButtonComponent } from './google-button.component';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, GoogleButtonComponent],
   templateUrl: './login.component.html',
   styleUrl: './auth.css',
 })

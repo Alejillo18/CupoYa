@@ -8,6 +8,7 @@ import {
 } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { GoogleButtonComponent } from './google-button.component';
 
 function coinciden(group: AbstractControl): ValidationErrors | null {
   const password = group.get('password')?.value;
@@ -17,7 +18,7 @@ function coinciden(group: AbstractControl): ValidationErrors | null {
 
 @Component({
   selector: 'app-register',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, GoogleButtonComponent],
   templateUrl: './register.component.html',
   styleUrl: './auth.css',
 })
