@@ -43,3 +43,22 @@ model RefreshToken {
   @@index([familyId])
   @@map("refresh_tokens")
 }
+enum EventStatus {
+  ACTIVO
+  CANCELADO
+}
+
+model Event {
+  id                String      @id @default(uuid()) @db.Uuid
+  name              String
+  description       String      @default("")
+  venue             String
+  startsAt          DateTime    @map("starts_at")
+  totalCapacity     Int         @map("total_capacity")
+  availableCapacity Int         @map("available_capacity")
+  status            EventStatus @default(ACTIVO)
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  @@index([startsAt])
+  @@map("events")
+}
