@@ -5,12 +5,13 @@ import { firstValueFrom } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
 import { AuthService } from './core/auth.service';
+import { ConfigService } from './core/config.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(withInterceptors([authInterceptor])),
-    provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession())),
+    provideAppInitializer(() => firstValueFrom(inject(ConfigService).load())),
   ],
 };
