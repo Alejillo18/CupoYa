@@ -129,4 +129,28 @@ describe('AuthService', () => {
     expect(terminado).toBe(true);
     expect(service.isAuthenticated()).toBe(false);
   });
+  it('loginWithGoogle envía el idToken con credenciales y guarda la sesión', () => {
+    service.loginWithGoogle('id-token-123').subscribe();
+
+    const req = http.expectOne(`${API}/google`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.withCredentials).toBe(true);
+    expect(req.request.body).toEqual({ idToken: 'id-token-123' });
+    req.flush({ user: { id: 'u1', email: 'ana@mail.com', role: 'USUARIO' }, accessToken: 'tokG' });
+
+    expect(service.isAuthenticated()).toBe(true);
+    expect(service.accessToken()).toBe('tokG');
+  });
+
+  it('loginWithGoogle fallido no deja sesión', () => {
+    let status = 0;
+    service.loginWithGoogle('malo').subscribe({ error: (e) => (status = e.status) });
+
+    http
+      .expectOne(`${API}/google`)
+      .flush({ error: { code: 'GOOGLE_INVALIDO' } }, { status: 401, statusText: 'Unauthorized' });
+
+    expect(status).toBe(401);
+    expect(service.isAuthenticated()).toBe(false);
+  });
 });

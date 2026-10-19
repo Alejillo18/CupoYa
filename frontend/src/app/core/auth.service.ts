@@ -42,6 +42,20 @@ export class AuthService {
         }),
       );
   }
+  loginWithGoogle(idToken: string): Observable<{ user: User; accessToken: string }> {
+    return this.http
+      .post<{ user: User; accessToken: string }>(
+        `${API}/google`,
+        { idToken },
+        { withCredentials: true },
+      )
+      .pipe(
+        tap((res) => {
+          this._accessToken.set(res.accessToken);
+          this._user.set(res.user);
+        }),
+      );
+  }
 
   refresh(): Observable<{ accessToken: string }> {
     return this.http
