@@ -58,8 +58,15 @@ describe('AuthService.register (carrera por email duplicado)', () => {
     const racingRepo: UserRepository = {
       findByEmail: async () => null,
       findById: async () => null,
+      findByGoogleSub: async () => null,
       create: async () => {
         throw new EmailAlreadyExistsError();
+      },
+      createFromGoogle: async () => {
+        throw new EmailAlreadyExistsError();
+      },
+      linkGoogle: async () => {
+        throw new Error('no se usa');
       },
       registerFailedLogin: async () => {},
       resetFailedLogins: async () => {},
