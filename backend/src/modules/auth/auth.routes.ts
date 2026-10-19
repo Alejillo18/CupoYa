@@ -1,9 +1,9 @@
 import { CookieOptions, Request, Response, Router } from 'express';
 import { AppError } from '../../errors/AppError';
+import { authenticate } from '../../middlewares/auth';
 import { validateBody } from '../../middlewares/validate';
 import { AuthService } from './auth.service';
 import { googleSchema, loginSchema, registerSchema } from './auth.schemas';
-import { authenticate } from '../../middlewares/auth';
 import { TokenService } from './token.service';
 
 const COOKIE_NAME = 'refresh_token';
@@ -57,17 +57,35 @@ export function authRoutes(authService: AuthService, options: AuthRoutesOptions)
     }
   });
 
+  router.post('/google', validateBody(googleSchema), async (req, res, next) => {
+    try {
+      const { refreshToken, ...result } = await authService.loginWithGoogle(req.body.idToken);
+      setRefreshCookie(res, refreshToken);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post('/refresh', async (req, res, next) => {
     try {
       const token = readRefreshCookie(req);
       if (!token) {
-        throw new AppError(401, 'REFRESH_INVALIDO', 'La sesión no es válida. Iniciá sesión de nuevo.');
+        throw new AppError(
+          401,
+          'REFRESH_INVALIDO',
+          'La sesión no es válida. Iniciá sesión de nuevo.',
+        );
       }
       const { refreshToken, accessToken } = await authService.refresh(token);
       setRefreshCookie(res, refreshToken);
       res.status(200).json({ accessToken });
     } catch (err) {
-      clearRefreshCookie(res);
+      // Solo se borra la cookie si el servidor rechazó el token (401).
+      // Ante errores transitorios (500) se conserva para poder reintentar.
+      if (err instanceof AppError && err.status === 401) {
+        clearRefreshCookie(res);
+      }
       next(err);
     }
   });
@@ -82,19 +100,11 @@ export function authRoutes(authService: AuthService, options: AuthRoutesOptions)
       next(err);
     }
   });
+
   router.get('/me', authenticate(options.tokens), async (req, res, next) => {
     try {
       const user = await authService.me(req.auth!.userId);
       res.status(200).json({ user });
-    } catch (err) {
-      next(err);
-    }
-  });
-  router.post('/google', validateBody(googleSchema), async (req, res, next) => {
-    try {
-      const { refreshToken, ...result } = await authService.loginWithGoogle(req.body.idToken);
-      setRefreshCookie(res, refreshToken);
-      res.status(200).json(result);
     } catch (err) {
       next(err);
     }
