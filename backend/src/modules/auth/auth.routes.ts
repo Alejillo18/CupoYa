@@ -1,6 +1,7 @@
 import { CookieOptions, Request, Response, Router } from 'express';
 import { AppError } from '../../errors/AppError';
 import { authenticate } from '../../middlewares/auth';
+import { RateLimiter, rateLimit } from '../../middlewares/rateLimit';
 import { validateBody } from '../../middlewares/validate';
 import { AuthService } from './auth.service';
 import { googleSchema, loginSchema, registerSchema } from './auth.schemas';
@@ -13,10 +14,19 @@ const REFRESH_DAYS = 7;
 export interface AuthRoutesOptions {
   cookieSecure?: boolean;
   tokens: TokenService;
+  rateLimiter?: RateLimiter;
 }
 
 export function authRoutes(authService: AuthService, options: AuthRoutesOptions): Router {
   const router = Router();
+
+  // Limita solo las rutas sensibles a fuerza bruta; va antes de validar.
+  if (options.rateLimiter) {
+    const limite = rateLimit(options.rateLimiter, 'auth');
+    for (const ruta of ['/register', '/login', '/google', '/refresh']) {
+      router.use(ruta, limite);
+    }
+  }
 
   const baseCookie: CookieOptions = {
     httpOnly: true,
@@ -82,7 +92,6 @@ export function authRoutes(authService: AuthService, options: AuthRoutesOptions)
       res.status(200).json({ accessToken });
     } catch (err) {
       // Solo se borra la cookie si el servidor rechazó el token (401).
-      // Ante errores transitorios (500) se conserva para poder reintentar.
       if (err instanceof AppError && err.status === 401) {
         clearRefreshCookie(res);
       }

@@ -1,6 +1,7 @@
 import cookieParser from 'cookie-parser';
 import express, { Application } from 'express';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
+import { RateLimiter } from './middlewares/rateLimit';
 import { authRoutes } from './modules/auth/auth.routes';
 import { AuthService } from './modules/auth/auth.service';
 import { TokenService } from './modules/auth/token.service';
@@ -20,11 +21,15 @@ export interface AppDependencies {
   reservationsService?: ReservationsService;
   reportsService?: ReportsService;
   tokens?: TokenService;
+  rateLimiter?: RateLimiter;
   cookieSecure?: boolean;
 }
 
 export function createApp(deps: AppDependencies = {}): Application {
   const app = express();
+
+  // Detrás de nginx: la IP real viene en X-Forwarded-For.
+  app.set('trust proxy', true);
 
   app.use(express.json());
   app.use(cookieParser());
@@ -36,7 +41,11 @@ export function createApp(deps: AppDependencies = {}): Application {
   if (deps.authService && deps.tokens) {
     app.use(
       '/api/v1/auth',
-      authRoutes(deps.authService, { cookieSecure: deps.cookieSecure, tokens: deps.tokens }),
+      authRoutes(deps.authService, {
+        cookieSecure: deps.cookieSecure,
+        tokens: deps.tokens,
+        rateLimiter: deps.rateLimiter,
+      }),
     );
   }
 

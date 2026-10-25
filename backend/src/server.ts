@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import Redis from 'ioredis';
 import { createApp } from './app';
+import { RedisRateLimiter } from './middlewares/redisRateLimiter';
 import { PrismaUserRepository } from './modules/auth/auth.repository';
 import { AuthService } from './modules/auth/auth.service';
 import { GoogleAuthVerifier } from './modules/auth/google.verifier.real';
@@ -45,7 +47,21 @@ const authService = new AuthService(
 const eventsService = new EventsService(new PrismaEventRepository(prisma));
 const usersService = new UsersService(new PrismaUsersRepository(prisma));
 const reservationsService = new ReservationsService(new PrismaReservationsRepository(prisma));
-const reportsService = new ReportsService(new PrismaReportsRepository(prisma), new ReportPool());
+const reportsService = new ReportsService(
+  new PrismaReportsRepository(prisma),
+  new ReportPool(),
+  undefined,
+  Number(process.env.REPORT_SIMULATED_WORK_MS) || 0,
+);
+
+let rateLimiter: RedisRateLimiter | undefined;
+if (process.env.RATE_LIMIT_ENABLED !== 'false' && process.env.REDIS_URL) {
+  const redis = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 1 });
+  redis.on('error', (e) => console.error('Redis:', e.message));
+  rateLimiter = new RedisRateLimiter(redis, Number(process.env.RATE_LIMIT_MAX) || 20, 60);
+} else {
+  console.warn('Rate limiting deshabilitado.');
+}
 
 createApp({
   authService,
@@ -53,6 +69,7 @@ createApp({
   usersService,
   reservationsService,
   reportsService,
+  rateLimiter,
   tokens,
   cookieSecure: process.env.COOKIE_SECURE === 'true',
 }).listen(port, () => {
