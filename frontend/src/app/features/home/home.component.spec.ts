@@ -1,18 +1,25 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
-import { signal } from '@angular/core';
 import { vi } from 'vitest';
-import { AuthService } from '../../core/auth.service';
+import { AuthService, Role } from '../../core/auth.service';
 import { HomeComponent } from './home.component';
 
 describe('HomeComponent', () => {
-  let auth: { user: ReturnType<typeof signal>; logout: ReturnType<typeof vi.fn> };
+  const rol = signal<Role>('OPERADOR');
+  let auth: {
+    user: ReturnType<typeof signal>;
+    role: typeof rol;
+    logout: ReturnType<typeof vi.fn>;
+  };
   let router: Router;
 
   beforeEach(() => {
+    rol.set('OPERADOR');
     auth = {
       user: signal({ id: 'u1', email: 'ana@mail.com', role: 'OPERADOR' }),
+      role: rol,
       logout: vi.fn().mockReturnValue(of(undefined)),
     };
     TestBed.configureTestingModule({
@@ -39,5 +46,20 @@ describe('HomeComponent', () => {
 
     expect(auth.logout).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/login');
+  });
+
+  it('un ADMIN ve el botón Administrar usuarios', () => {
+    rol.set('ADMIN');
+    const fixture = TestBed.createComponent(HomeComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Administrar usuarios');
+  });
+
+  it('un OPERADOR no ve el botón Administrar usuarios', () => {
+    const fixture = TestBed.createComponent(HomeComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Administrar usuarios');
   });
 });

@@ -100,3 +100,8 @@
 .boton.secundario:hover {
   background: #eef3ff;
 }
+
+.aviso {
+  color: #555;
+  font-size: 0.9rem;
+}

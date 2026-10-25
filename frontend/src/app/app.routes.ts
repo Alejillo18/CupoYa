@@ -5,6 +5,7 @@ import { RegisterComponent } from './features/auth/register.component';
 import { EventFormComponent } from './features/events/event-form.component';
 import { EventsListComponent } from './features/events/events-list.component';
 import { HomeComponent } from './features/home/home.component';
+import { UsersListComponent } from './features/users/users-list.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [guestGuard] },
@@ -22,5 +23,6 @@ export const routes: Routes = [
     canActivate: [roleGuard('OPERADOR', 'ADMIN')],
   },
   { path: '', pathMatch: 'full', redirectTo: 'login' },
+  { path: 'usuarios', component: UsersListComponent, canActivate: [roleGuard('ADMIN')] },
   { path: '**', redirectTo: 'login' },
 ];
