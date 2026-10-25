@@ -5,6 +5,7 @@
     <p>Rol: <strong>{{ u.role }}</strong></p>
   }
   <p><a routerLink="/eventos" class="boton">Ver eventos</a></p>
+  <p><a routerLink="/reservas" class="boton secundario">Mis reservas</a></p>
   @if (esAdmin()) {
     <p><a routerLink="/usuarios" class="boton secundario">Administrar usuarios</a></p>
   }
