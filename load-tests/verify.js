@@ -30,6 +30,7 @@ async function main() {
     e.availableCapacity >= 0 &&
     e.availableCapacity + confirmadas === e.totalCapacity &&
     excedidos.length === 0;
+    confirmadas > 0;
   console.log(ok ? 'RESULTADO: OK, sin sobreventa' : 'RESULTADO: FALLA, hay inconsistencia');
   await prisma.$disconnect();
   process.exit(ok ? 0 : 1);

@@ -10,17 +10,17 @@ Proyecto académico desarrollado con **Programación Extrema (XP)** y **TDD**.
 |---|---|---|
 | 1 | Registro, login, sesiones con refresh, roles, contenedores, frontend Angular | Completa (`v0.1.0`) |
 | 2 | Login con Google | Completa (`v0.2.0`) |
-| 3 | Eventos y administración de usuarios | Pendiente |
-| 4 | Reservas con control de concurrencia | Pendiente |
+| 3 | Eventos y administración de usuarios y roles | Completa (`v0.3.0`) |
+| 4 | Reservas con control de concurrencia, cluster y prueba de carga | Completa (`v0.4.0`) |
 | 5 | Reportes en segundo plano (worker threads) | Pendiente |
-| 6 | Pruebas de carga y cierre | Pendiente |
+| 6 | Cierre, documentación final y entrega | Pendiente |
 
 ## Stack
 
-- **Backend:** Node 22, Express, TypeScript, Prisma, PostgreSQL 16
+- **Backend:** Node 22, Express, TypeScript, Prisma, PostgreSQL 16, `cluster` (multiproceso)
 - **Frontend:** Angular 21 (componentes standalone, signals), servido por nginx
 - **Autenticación:** JWT + refresh token rotativo, Google Identity Services
-- **Pruebas:** Jest + Supertest (backend), Vitest (frontend), integración contra PostgreSQL real
+- **Pruebas:** Jest + Supertest (backend), Vitest (frontend), integración contra PostgreSQL real, k6 (carga)
 - **Infraestructura:** Docker y Docker Compose
 
 ## Estructura
@@ -29,7 +29,7 @@ Proyecto académico desarrollado con **Programación Extrema (XP)** y **TDD**.
 cupoya/
 ├─ backend/        API REST (Express + TypeScript)
 ├─ frontend/       Interfaz (Angular + nginx)
-├─ load-tests/     Pruebas de carga
+├─ load-tests/     Pruebas de carga (k6) y verificación de consistencia
 ├─ docker-compose.yml
 └─ .env.example
 ```
@@ -41,16 +41,20 @@ Requisitos: Docker Desktop (o Docker Engine + Compose).
 1. Clonar el repositorio.
 2. Copiar `.env.example` a `.env` y completar `DB_PASSWORD`, `JWT_SECRET` (mínimo 32 caracteres) y, opcionalmente, `GOOGLE_CLIENT_ID`.
 3. Ejecutar:
-```bash
+   ```bash
    docker compose up --build -d
-```
+   ```
 4. Abrir `http://localhost:8080`.
 
-Solo el frontend (nginx) se expone al host; reenvía `/api/` al backend por la red interna, de modo que navegador y API comparten origen.
+Solo el frontend (nginx) se expone al host; reenvía `/api/` al backend por la red interna, de modo que navegador y API comparten origen. El backend corre en modo `cluster` (4 workers por defecto, configurable con `WEB_CONCURRENCY`).
 
 > Si cambiás `DB_USER` o `DB_PASSWORD` después de la primera ejecución, corré `docker compose down -v`: Postgres conserva las credenciales con las que se creó el volumen.
 
 La base se publica en el puerto **5433** del host (para convivir con un PostgreSQL local en el 5432).
+
+### Roles
+
+Los usuarios nuevos tienen rol `USUARIO`. Un `ADMIN` cambia roles desde `/usuarios`; el primer administrador se asigna editando el campo `role` en la base (por ejemplo con Prisma Studio). El rol viaja en el token y rige desde el próximo ingreso.
 
 ### Login con Google (opcional)
 
@@ -63,16 +67,57 @@ Requiere un Client ID de OAuth (tipo "Aplicación web") con `http://localhost:42
 | GET | `/health` | Público | Estado del servicio |
 | POST | `/auth/register` | Público | Registro (email y contraseña) |
 | POST | `/auth/login` | Público | Login: access token en el cuerpo, refresh token en cookie httpOnly |
-| POST | `/auth/google` | Público | Login con Google (verifica el ID token; crea o vincula la cuenta) |
+| POST | `/auth/google` | Público | Login con Google (crea o vincula la cuenta) |
 | POST | `/auth/refresh` | Cookie | Renueva la sesión (rotación del refresh token) |
 | POST | `/auth/logout` | Cookie | Cierra la sesión e invalida el token |
 | GET | `/auth/me` | Autenticado | Usuario actual |
+| GET | `/events` | Autenticado | Listado paginado de eventos activos y futuros |
+| GET | `/events/:id` | Autenticado | Detalle de un evento |
+| POST | `/events` | Operador, Admin | Crear evento |
+| PUT | `/events/:id` | Operador, Admin | Editar evento (no baja el cupo por debajo de lo reservado) |
+| DELETE | `/events/:id` | Operador, Admin | Cancelar evento (no se borra) |
+| POST | `/events/:id/reservations` | Autenticado | Reservar 1 a 4 lugares; admite `Idempotency-Key` |
+| GET | `/reservations/me` | Autenticado | Mis reservas |
+| POST | `/reservations/:id/cancel` | Dueño o Admin | Cancelar reserva (libera el cupo, idempotente) |
+| GET | `/users` | Admin | Listado paginado de usuarios |
+| PATCH | `/users/:id/role` | Admin | Cambiar rol (siempre queda al menos un Admin) |
 
 Errores con formato unificado:
 
 ```json
 { "error": { "code": "CODIGO", "message": "Mensaje", "details": [] } }
 ```
+
+## Concurrencia
+
+- **Sin sobreventa:** la reserva es una transacción con un `UPDATE ... WHERE available_capacity >= qty` atómico; una restricción `CHECK` en la base actúa como segunda red.
+- **Límite por usuario:** máximo 4 lugares por evento, serializado con un advisory lock por usuario y evento.
+- **Idempotencia:** `(user_id, idempotency_key)` único; repetir un pedido con la misma clave devuelve la misma reserva.
+- **Multiproceso:** `cluster` con política de reinicio de workers; sin estado en memoria (tokens autocontenidos y datos en PostgreSQL).
+
+### Prueba de carga (k6)
+
+Medición con 2.000 usuarios simultáneos sobre un evento de 3.000 lugares (demanda ≈ 5.000), ejecutada dentro de la red de Docker Compose en una PC de 12 núcleos:
+
+| Medida | Resultado |
+|---|---|
+| Respuestas esperadas (201 o 409) | 2.000 de 2.000 |
+| Errores o timeouts | 0 |
+| Latencia p95 | ≈ 10 ms |
+| Lugares confirmados | 3.000 = cupo (disponible 0) |
+| Usuarios con más de 4 lugares | 0 |
+
+Para reproducirla (backend y base levantados con `docker compose up -d`; el `JWT_SECRET` de `backend/.env` debe coincidir con el de `.env`):
+
+```bash
+cd load-tests
+LOAD_CAPACITY=3000 npm run preparar     # en PowerShell: $env:LOAD_CAPACITY=3000; npm run preparar
+docker run --rm -i --network cupoya_default -e BASE_URL=http://backend:3000 \
+  -v "$PWD:/scripts" -w /scripts grafana/k6 run reservas.js
+npm run verify                          # comprueba que no hubo sobreventa
+```
+
+Los resultados dependen del equipo; la consistencia (cero sobreventa) es lo que se verifica siempre.
 
 ## Seguridad implementada
 
@@ -98,10 +143,10 @@ cd backend
 npm install
 cp .env.example .env             # DATABASE_URL apuntando a localhost:5433
 npx prisma migrate deploy
-npm run dev
+npm run dev                      # un proceso; para multiproceso: npm run dev:cluster
 ```
 
-Variables de `backend/.env` (no se versiona): `DATABASE_URL`, `JWT_SECRET`, `JWT_ACCESS_TTL`, `REFRESH_TTL_DAYS`, `COOKIE_SECURE`, `GOOGLE_CLIENT_ID`.
+Variables de `backend/.env` (no se versiona): `DATABASE_URL` (puede incluir `?connection_limit=10`), `JWT_SECRET`, `JWT_ACCESS_TTL`, `REFRESH_TTL_DAYS`, `COOKIE_SECURE`, `GOOGLE_CLIENT_ID`, `WEB_CONCURRENCY`.
 
 **Frontend**
 
@@ -128,7 +173,7 @@ Para las de integración, crear la base de pruebas, migrarla y definir `TEST_DAT
 docker compose exec db psql -U cupoya -d cupoya -c "CREATE DATABASE cupoya_test;"
 ```
 
-Estado actual: backend 98 unitarias y 13 de integración; frontend 61.
+Estado actual: backend 178 unitarias y 40 de integración (incluye concurrencia real contra PostgreSQL); frontend 125.
 
 ## Metodología
 
