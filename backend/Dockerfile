@@ -22,4 +22,4 @@
     COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
     USER node
     EXPOSE 3000
-    CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node dist/server.js"]
+    CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node dist/cluster.js"]
