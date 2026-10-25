@@ -1,0 +1,8 @@
+{
+    "name": "cupoya-load-tests",
+    "private": true,
+    "scripts": {
+      "preparar": "node --env-file=../backend/.env prepare.js",
+      "verify": "node --env-file=../backend/.env verify.js"
+    }
+  }
