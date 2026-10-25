@@ -6,6 +6,10 @@
     <p><a routerLink="/eventos/nuevo" class="boton">Nuevo evento</a></p>
   }
 
+  @if (aviso()) {
+    <p class="ok" role="status">{{ aviso() }}</p>
+  }
+
   @if (loading()) {
     <p role="status">Cargando…</p>
   }
@@ -27,6 +31,7 @@
           <th>Fecha</th>
           <th>Lugar</th>
           <th>Lugares</th>
+          <th>Reservar</th>
           @if (puedeGestionar()) {
             <th>Acciones</th>
           }
@@ -44,6 +49,20 @@
               } @else {
                 {{ e.availableCapacity }} / {{ e.totalCapacity }}
               }
+            </td>
+            <td class="acciones">
+              <select
+                [attr.aria-label]="'Cantidad para ' + e.name"
+                (change)="alElegirCantidad(e.id, $event)"
+                [disabled]="e.availableCapacity === 0"
+              >
+                @for (n of opciones; track n) {
+                  <option [value]="n" [selected]="n === cantidadDe(e.id)">{{ n }}</option>
+                }
+              </select>
+              <button type="button" (click)="reservar(e)" [disabled]="e.availableCapacity === 0">
+                Reservar
+              </button>
             </td>
             @if (puedeGestionar()) {
               <td class="acciones">
