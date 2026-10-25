@@ -13,6 +13,8 @@ export class ReportsService {
     private readonly repo: ReportsRepository,
     private readonly pool: ReportRunner,
     private readonly now: () => Date = () => new Date(),
+    // Solo para pruebas de carga: ocupa el hilo de trabajo ese tiempo. En producción vale 0.
+    private readonly simulatedWorkMs: number = 0,
   ) {}
 
   async request(userId: string): Promise<ReportRecord> {
@@ -55,7 +57,7 @@ export class ReportsService {
     try {
       await this.repo.setStatus(id, 'EN_PROCESO');
       const datos = await this.repo.loadData();
-      const salida = await this.pool.run(datos);
+      const salida = await this.pool.run({ ...datos, simulatedWorkMs: this.simulatedWorkMs });
       await this.repo.setStatus(id, 'LISTO', { result: salida, finishedAt: this.now() });
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : 'Error desconocido';

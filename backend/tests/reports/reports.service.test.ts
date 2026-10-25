@@ -127,4 +127,19 @@ describe('ReportsService', () => {
     liberar();
     await esperar();
   });
+  it('pasa la carga simulada configurada al hilo', async () => {
+    service = new ReportsService(repo, pool, () => ahora, 250);
+
+    await service.request('adm');
+    await esperar();
+
+    expect(pool.run).toHaveBeenCalledWith(expect.objectContaining({ simulatedWorkMs: 250 }));
+  });
+
+  it('por defecto no simula carga', async () => {
+    await service.request('adm');
+    await esperar();
+
+    expect(pool.run).toHaveBeenCalledWith(expect.objectContaining({ simulatedWorkMs: 0 }));
+  });
 });
