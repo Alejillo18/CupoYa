@@ -7,6 +7,7 @@ import { EventsListComponent } from './features/events/events-list.component';
 import { HomeComponent } from './features/home/home.component';
 import { UsersListComponent } from './features/users/users-list.component';
 import {MyReservationsComponent} from "./features/reservations/my-reservations.component"
+import {ReportsComponent} from "./features/reports/reports.component"
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [guestGuard] },
@@ -26,5 +27,6 @@ export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'login' },
   { path: 'usuarios', component: UsersListComponent, canActivate: [roleGuard('ADMIN')] },
   { path: 'reservas', component: MyReservationsComponent, canActivate: [authGuard] },
+  { path: 'reportes', component: ReportsComponent, canActivate: [roleGuard('ADMIN')] },
   { path: '**', redirectTo: 'login' },
 ];

@@ -8,6 +8,7 @@
   <p><a routerLink="/reservas" class="boton secundario">Mis reservas</a></p>
   @if (esAdmin()) {
     <p><a routerLink="/usuarios" class="boton secundario">Administrar usuarios</a></p>
+    <p><a routerLink="/reportes" class="boton secundario">Reportes de ocupación</a></p>
   }
   <button type="button" (click)="logout()">Cerrar sesión</button>
 </main>
