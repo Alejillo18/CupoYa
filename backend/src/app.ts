@@ -1,5 +1,7 @@
 import cookieParser from 'cookie-parser';
 import express, { Application } from 'express';
+import swaggerUi from 'swagger-ui-express';
+import { openApiSpec } from './docs/openapi';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 import { RateLimiter } from './middlewares/rateLimit';
 import { authRoutes } from './modules/auth/auth.routes';
@@ -37,6 +39,12 @@ export function createApp(deps: AppDependencies = {}): Application {
   app.get('/api/v1/health', (_req, res) => {
     res.status(200).json({ status: 'ok' });
   });
+
+  // Documentación de la API (OpenAPI + Swagger UI)
+  app.get('/api/openapi.json', (_req, res) => {
+    res.json(openApiSpec);
+  });
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
   if (deps.authService && deps.tokens) {
     app.use(
