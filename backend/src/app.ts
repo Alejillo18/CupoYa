@@ -6,6 +6,8 @@ import { AuthService } from './modules/auth/auth.service';
 import { TokenService } from './modules/auth/token.service';
 import { eventsRoutes } from './modules/events/events.routes';
 import { EventsService } from './modules/events/events.service';
+import { reportsRoutes } from './modules/reports/reports.routes';
+import { ReportsService } from './modules/reports/reports.service';
 import { reservationsRoutes } from './modules/reservations/reservations.routes';
 import { ReservationsService } from './modules/reservations/reservations.service';
 import { usersRoutes } from './modules/users/users.routes';
@@ -16,6 +18,7 @@ export interface AppDependencies {
   eventsService?: EventsService;
   usersService?: UsersService;
   reservationsService?: ReservationsService;
+  reportsService?: ReportsService;
   tokens?: TokenService;
   cookieSecure?: boolean;
 }
@@ -51,6 +54,10 @@ export function createApp(deps: AppDependencies = {}): Application {
 
   if (deps.usersService && deps.tokens) {
     app.use('/api/v1/users', usersRoutes(deps.usersService, deps.tokens));
+  }
+
+  if (deps.reportsService && deps.tokens) {
+    app.use('/api/v1/reports', reportsRoutes(deps.reportsService, deps.tokens));
   }
 
   app.use(notFoundHandler);
