@@ -69,3 +69,8 @@
   align-items: center;
   justify-content: center;
 }
+.auth textarea {
+  padding: 0.5rem;
+  font-size: 1rem;
+  font-family: inherit;
+}
