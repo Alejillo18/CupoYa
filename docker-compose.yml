@@ -19,7 +19,8 @@ services:
     build: ./backend
     environment:
       PORT: 3000
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/cupoya
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/cupoya?connection_limit=10
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-900}
       REFRESH_TTL_DAYS: ${REFRESH_TTL_DAYS:-7}
