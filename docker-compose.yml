@@ -15,22 +15,37 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build: ./backend
     environment:
       PORT: 3000
-      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/cupoya?connection_limit=10
-      REPORT_SIMULATED_WORK_MS: ${REPORT_SIMULATED_WORK_MS:-0}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-900}
       REFRESH_TTL_DAYS: ${REFRESH_TTL_DAYS:-7}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+      REPORT_SIMULATED_WORK_MS: ${REPORT_SIMULATED_WORK_MS:-0}
+      REDIS_URL: redis://redis:6379
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-20}
     expose:
       - "3000"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/health"]
