@@ -12,12 +12,12 @@ Proyecto académico desarrollado con **Programación Extrema (XP)** y **TDD**.
 | 2 | Login con Google | Completa (`v0.2.0`) |
 | 3 | Eventos y administración de usuarios y roles | Completa (`v0.3.0`) |
 | 4 | Reservas con control de concurrencia, cluster y prueba de carga | Completa (`v0.4.0`) |
-| 5 | Reportes en segundo plano (worker threads) | Pendiente |
-| 6 | Cierre, documentación final y entrega | Pendiente |
+| 5 | Reportes de ocupación en segundo plano (`worker_threads`) | Completa (`v0.5.0`) |
+| 6 | CI, rate limiting, documentación de la API y cierre | Pendiente |
 
 ## Stack
 
-- **Backend:** Node 22, Express, TypeScript, Prisma, PostgreSQL 16, `cluster` (multiproceso)
+- **Backend:** Node 22, Express, TypeScript, Prisma, PostgreSQL 16, `cluster` (multiproceso) y `worker_threads` (Piscina)
 - **Frontend:** Angular 21 (componentes standalone, signals), servido por nginx
 - **Autenticación:** JWT + refresh token rotativo, Google Identity Services
 - **Pruebas:** Jest + Supertest (backend), Vitest (frontend), integración contra PostgreSQL real, k6 (carga)
@@ -46,7 +46,7 @@ Requisitos: Docker Desktop (o Docker Engine + Compose).
    ```
 4. Abrir `http://localhost:8080`.
 
-Solo el frontend (nginx) se expone al host; reenvía `/api/` al backend por la red interna, de modo que navegador y API comparten origen. El backend corre en modo `cluster` (4 workers por defecto, configurable con `WEB_CONCURRENCY`).
+Solo el frontend (nginx) se expone al host; reenvía `/api/` al backend por la red interna, de modo que navegador y API comparten origen. El backend corre en modo `cluster` (4 workers HTTP por defecto, configurable con `WEB_CONCURRENCY`).
 
 > Si cambiás `DB_USER` o `DB_PASSWORD` después de la primera ejecución, corré `docker compose down -v`: Postgres conserva las credenciales con las que se creó el volumen.
 
@@ -81,6 +81,9 @@ Requiere un Client ID de OAuth (tipo "Aplicación web") con `http://localhost:42
 | POST | `/reservations/:id/cancel` | Dueño o Admin | Cancelar reserva (libera el cupo, idempotente) |
 | GET | `/users` | Admin | Listado paginado de usuarios |
 | PATCH | `/users/:id/role` | Admin | Cambiar rol (siempre queda al menos un Admin) |
+| POST | `/reports` | Admin | Solicitar reporte de ocupación (202, se genera en segundo plano) |
+| GET | `/reports/:id` | Admin | Estado del reporte y, si está listo, el resultado |
+| GET | `/reports/:id/download` | Admin | Descargar el reporte en CSV (409 si no está listo) |
 
 Errores con formato unificado:
 
@@ -88,24 +91,27 @@ Errores con formato unificado:
 { "error": { "code": "CODIGO", "message": "Mensaje", "details": [] } }
 ```
 
-## Concurrencia
+## Concurrencia y paralelismo
 
 - **Sin sobreventa:** la reserva es una transacción con un `UPDATE ... WHERE available_capacity >= qty` atómico; una restricción `CHECK` en la base actúa como segunda red.
 - **Límite por usuario:** máximo 4 lugares por evento, serializado con un advisory lock por usuario y evento.
 - **Idempotencia:** `(user_id, idempotency_key)` único; repetir un pedido con la misma clave devuelve la misma reserva.
 - **Multiproceso:** `cluster` con política de reinicio de workers; sin estado en memoria (tokens autocontenidos y datos en PostgreSQL).
+- **Multihilo:** los reportes de ocupación se calculan en un pool de `worker_threads` (Piscina, `REPORT_THREADS` hilos por proceso), fuera del *event loop* que atiende la API. El estado del reporte (`PENDIENTE`, `EN_PROCESO`, `LISTO`, `ERROR`) vive en la base, así que cualquier worker del cluster puede responder la consulta. Un reporte `EN_PROCESO` por más de 10 minutos se marca como `ERROR`.
 
 ### Prueba de carga (k6)
 
 Medición con 2.000 usuarios simultáneos sobre un evento de 3.000 lugares (demanda ≈ 5.000), ejecutada dentro de la red de Docker Compose en una PC de 12 núcleos:
 
-| Medida | Resultado |
-|---|---|
-| Respuestas esperadas (201 o 409) | 2.000 de 2.000 |
-| Errores o timeouts | 0 |
-| Latencia p95 | ≈ 10 ms |
-| Lugares confirmados | 3.000 = cupo (disponible 0) |
-| Usuarios con más de 4 lugares | 0 |
+| Medida | Sin reportes | Con 20 reportes en curso |
+|---|---|---|
+| Respuestas esperadas (201 o 409) | 2.000 de 2.000 | 2.000 de 2.000 |
+| Errores o timeouts | 0 | 0 |
+| Latencia p95 | ≈ 10 ms | ≈ 12 ms |
+| Lugares confirmados | 3.000 = cupo | 3.000 = cupo |
+| Usuarios con más de 4 lugares | 0 | 0 |
+
+En la segunda columna, cada reporte ocupaba su hilo 3 s de CPU simulada (`REPORT_SIMULATED_WORK_MS=3000`) y los 20 terminaron en `LISTO`. La diferencia de latencia está dentro del ruido entre corridas.
 
 Para reproducirla (backend y base levantados con `docker compose up -d`; el `JWT_SECRET` de `backend/.env` debe coincidir con el de `.env`):
 
@@ -130,6 +136,7 @@ Los resultados dependen del equipo; la consistencia (cero sobreventa) es lo que 
 - Login con Google: se verifica firma, vencimiento y audiencia del ID token; solo se acepta `email_verified`.
 - Una cuenta creada con Google no tiene contraseña; registrarse primero con email y luego entrar con Google vincula ambas.
 - Autorización por roles (`USUARIO`, `OPERADOR`, `ADMIN`) con middlewares `authenticate` y `authorize`, y guards en Angular.
+- El CSV de reportes neutraliza textos que una planilla interpretaría como fórmulas.
 
 ## Desarrollo local
 
@@ -146,7 +153,7 @@ npx prisma migrate deploy
 npm run dev                      # un proceso; para multiproceso: npm run dev:cluster
 ```
 
-Variables de `backend/.env` (no se versiona): `DATABASE_URL` (puede incluir `?connection_limit=10`), `JWT_SECRET`, `JWT_ACCESS_TTL`, `REFRESH_TTL_DAYS`, `COOKIE_SECURE`, `GOOGLE_CLIENT_ID`, `WEB_CONCURRENCY`.
+Variables de `backend/.env` (no se versiona): `DATABASE_URL` (puede incluir `?connection_limit=10`), `JWT_SECRET`, `JWT_ACCESS_TTL`, `REFRESH_TTL_DAYS`, `COOKIE_SECURE`, `GOOGLE_CLIENT_ID`, `WEB_CONCURRENCY`, `REPORT_THREADS`, `REPORT_SIMULATED_WORK_MS` (solo para pruebas de carga; en uso normal vale 0).
 
 **Frontend**
 
@@ -173,7 +180,7 @@ Para las de integración, crear la base de pruebas, migrarla y definir `TEST_DAT
 docker compose exec db psql -U cupoya -d cupoya -c "CREATE DATABASE cupoya_test;"
 ```
 
-Estado actual: backend 178 unitarias y 40 de integración (incluye concurrencia real contra PostgreSQL); frontend 125.
+Estado actual: backend 212 unitarias y 49 de integración (incluye concurrencia real contra PostgreSQL y un hilo real de `worker_threads`); frontend 139.
 
 ## Metodología
 
