@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
 import { EventItem, EventsService } from '../../core/events.service';
 
 const PAGE_SIZE = 10;
@@ -13,6 +14,7 @@ const PAGE_SIZE = 10;
 })
 export class EventsListComponent implements OnInit {
   private readonly events = inject(EventsService);
+  private readonly auth = inject(AuthService);
 
   readonly items = signal<EventItem[]>([]);
   readonly page = signal(1);
@@ -23,6 +25,10 @@ export class EventsListComponent implements OnInit {
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.total() / PAGE_SIZE)));
   readonly hayAnterior = computed(() => this.page() > 1);
   readonly haySiguiente = computed(() => this.page() < this.totalPages());
+  readonly puedeGestionar = computed(() => {
+    const r = this.auth.role();
+    return r === 'OPERADOR' || r === 'ADMIN';
+  });
 
   ngOnInit(): void {
     this.cargar(1);
@@ -51,5 +57,13 @@ export class EventsListComponent implements OnInit {
 
   anterior(): void {
     if (this.hayAnterior()) this.cargar(this.page() - 1);
+  }
+
+  cancelar(evento: EventItem): void {
+    if (!window.confirm(`¿Cancelar el evento "${evento.name}"?`)) return;
+    this.events.cancel(evento.id).subscribe({
+      next: () => this.cargar(this.page()),
+      error: () => this.error.set('No pudimos cancelar el evento. Intentá de nuevo.'),
+    });
   }
 }

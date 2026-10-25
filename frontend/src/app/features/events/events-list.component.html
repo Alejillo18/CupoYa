@@ -1,52 +1,65 @@
 <main class="auth ancho">
-    <h1>Eventos</h1>
-    <p><a routerLink="/inicio">Volver al inicio</a></p>
-  
-    @if (loading()) {
-      <p role="status">Cargando…</p>
-    }
-  
-    @if (error()) {
-      <p class="error" role="alert">{{ error() }}</p>
-      <button type="button" (click)="cargar(page())">Reintentar</button>
-    }
-  
-    @if (!loading() && !error() && items().length === 0) {
-      <p>No hay eventos disponibles.</p>
-    }
-  
-    @if (items().length > 0) {
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th>Evento</th>
-            <th>Fecha</th>
-            <th>Lugar</th>
-            <th>Lugares</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (e of items(); track e.id) {
-            <tr>
-              <td>{{ e.name }}</td>
-              <td>{{ e.startsAt | date: 'dd/MM/yyyy HH:mm' }}</td>
-              <td>{{ e.venue }}</td>
-              <td>
-                @if (e.availableCapacity === 0) {
-                  <strong>Agotado</strong>
-                } @else {
-                  {{ e.availableCapacity }} / {{ e.totalCapacity }}
-                }
-              </td>
-            </tr>
+  <h1>Eventos</h1>
+  <p><a routerLink="/inicio">Volver al inicio</a></p>
+
+  @if (puedeGestionar()) {
+    <p><a routerLink="/eventos/nuevo">Nuevo evento</a></p>
+  }
+
+  @if (loading()) {
+    <p role="status">Cargando…</p>
+  }
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+    <button type="button" (click)="cargar(page())">Reintentar</button>
+  }
+
+  @if (!loading() && !error() && items().length === 0) {
+    <p>No hay eventos disponibles.</p>
+  }
+
+  @if (items().length > 0) {
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Evento</th>
+          <th>Fecha</th>
+          <th>Lugar</th>
+          <th>Lugares</th>
+          @if (puedeGestionar()) {
+            <th>Acciones</th>
           }
-        </tbody>
-      </table>
-  
-      <nav class="paginas">
-        <button type="button" (click)="anterior()" [disabled]="!hayAnterior()">Anterior</button>
-        <span>Página {{ page() }} de {{ totalPages() }}</span>
-        <button type="button" (click)="siguiente()" [disabled]="!haySiguiente()">Siguiente</button>
-      </nav>
-    }
-  </main>
+        </tr>
+      </thead>
+      <tbody>
+        @for (e of items(); track e.id) {
+          <tr>
+            <td>{{ e.name }}</td>
+            <td>{{ e.startsAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+            <td>{{ e.venue }}</td>
+            <td>
+              @if (e.availableCapacity === 0) {
+                <strong>Agotado</strong>
+              } @else {
+                {{ e.availableCapacity }} / {{ e.totalCapacity }}
+              }
+            </td>
+            @if (puedeGestionar()) {
+              <td class="acciones">
+                <a [routerLink]="['/eventos', e.id, 'editar']">Editar</a>
+                <button type="button" (click)="cancelar(e)">Cancelar evento</button>
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <nav class="paginas">
+      <button type="button" (click)="anterior()" [disabled]="!hayAnterior()">Anterior</button>
+      <span>Página {{ page() }} de {{ totalPages() }}</span>
+      <button type="button" (click)="siguiente()" [disabled]="!haySiguiente()">Siguiente</button>
+    </nav>
+  }
+</main>

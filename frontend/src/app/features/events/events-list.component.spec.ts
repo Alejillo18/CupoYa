@@ -1,7 +1,9 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
+import { AuthService, Role } from '../../core/auth.service';
 import { EventsService } from '../../core/events.service';
 import { EventsListComponent } from './events-list.component';
 
@@ -17,7 +19,8 @@ const evento = (id: string, name: string, disponible = 40) => ({
 });
 
 describe('EventsListComponent', () => {
-  let events: { list: ReturnType<typeof vi.fn> };
+  let events: { list: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn> };
+  const rol = signal<Role | null>('USUARIO');
 
   async function crear() {
     const fixture = TestBed.createComponent(EventsListComponent);
@@ -28,9 +31,14 @@ describe('EventsListComponent', () => {
   }
 
   beforeEach(() => {
-    events = { list: vi.fn() };
+    rol.set('USUARIO');
+    events = { list: vi.fn(), cancel: vi.fn() };
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), { provide: EventsService, useValue: events }],
+      providers: [
+        provideRouter([]),
+        { provide: EventsService, useValue: events },
+        { provide: AuthService, useValue: { role: rol } },
+      ],
     });
   });
 
@@ -115,5 +123,81 @@ describe('EventsListComponent', () => {
     f.componentInstance.anterior();
 
     expect(events.list.mock.calls.length).toBe(llamadas);
+  });
+
+  describe('gestión (OPERADOR y ADMIN)', () => {
+    const conEvento = () =>
+      events.list.mockReturnValue(
+        of({ items: [evento('e1', 'Recital')], total: 1, page: 1, pageSize: 10 }),
+      );
+
+    it('un USUARIO no ve los botones de gestión', async () => {
+      conEvento();
+
+      const f = await crear();
+
+      const texto = f.nativeElement.textContent;
+      expect(texto).not.toContain('Nuevo evento');
+      expect(texto).not.toContain('Editar');
+      expect(texto).not.toContain('Cancelar evento');
+    });
+
+    it('un OPERADOR ve Nuevo, Editar y Cancelar', async () => {
+      rol.set('OPERADOR');
+      conEvento();
+
+      const f = await crear();
+
+      const texto = f.nativeElement.textContent;
+      expect(texto).toContain('Nuevo evento');
+      expect(texto).toContain('Editar');
+      expect(texto).toContain('Cancelar evento');
+    });
+
+    it('un ADMIN también ve los botones de gestión', async () => {
+      rol.set('ADMIN');
+      conEvento();
+
+      const f = await crear();
+
+      expect(f.nativeElement.textContent).toContain('Nuevo evento');
+    });
+
+    it('cancelar con confirmación llama a la API y recarga', async () => {
+      rol.set('OPERADOR');
+      conEvento();
+      events.cancel.mockReturnValue(of(undefined));
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const f = await crear();
+      const llamadas = events.list.mock.calls.length;
+
+      f.componentInstance.cancelar(evento('e1', 'Recital'));
+
+      expect(events.cancel).toHaveBeenCalledWith('e1');
+      expect(events.list.mock.calls.length).toBe(llamadas + 1);
+    });
+
+    it('si el usuario no confirma, no cancela', async () => {
+      rol.set('OPERADOR');
+      conEvento();
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const f = await crear();
+
+      f.componentInstance.cancelar(evento('e1', 'Recital'));
+
+      expect(events.cancel).not.toHaveBeenCalled();
+    });
+
+    it('si la API falla al cancelar muestra un mensaje', async () => {
+      rol.set('OPERADOR');
+      conEvento();
+      events.cancel.mockReturnValue(throwError(() => ({ status: 500 })));
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const f = await crear();
+
+      f.componentInstance.cancelar(evento('e1', 'Recital'));
+
+      expect(f.componentInstance.error()).toContain('No pudimos cancelar');
+    });
   });
 });

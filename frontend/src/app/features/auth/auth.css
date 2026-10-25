@@ -74,3 +74,8 @@
   font-size: 1rem;
   font-family: inherit;
 }
+.acciones {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
