@@ -5,6 +5,7 @@ import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService, Role } from '../../core/auth.service';
 import { EventsService } from '../../core/events.service';
+import { ReservationsService } from '../../core/reservations.service';
 import { EventsListComponent } from './events-list.component';
 
 const evento = (id: string, name: string, disponible = 40) => ({
@@ -20,6 +21,7 @@ const evento = (id: string, name: string, disponible = 40) => ({
 
 describe('EventsListComponent', () => {
   let events: { list: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn> };
+  let reservations: { reserve: ReturnType<typeof vi.fn> };
   const rol = signal<Role | null>('USUARIO');
 
   async function crear() {
@@ -33,11 +35,13 @@ describe('EventsListComponent', () => {
   beforeEach(() => {
     rol.set('USUARIO');
     events = { list: vi.fn(), cancel: vi.fn() };
+    reservations = { reserve: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: EventsService, useValue: events },
         { provide: AuthService, useValue: { role: rol } },
+        { provide: ReservationsService, useValue: reservations },
       ],
     });
   });
@@ -198,6 +202,90 @@ describe('EventsListComponent', () => {
       f.componentInstance.cancelar(evento('e1', 'Recital'));
 
       expect(f.componentInstance.error()).toContain('No pudimos cancelar');
+    });
+  });
+
+  describe('reservar', () => {
+    const conEvento = (disponible = 40) =>
+      events.list.mockReturnValue(
+        of({ items: [evento('e1', 'Recital', disponible)], total: 1, page: 1, pageSize: 10 }),
+      );
+
+    it('reserva la cantidad elegida y recarga el listado', async () => {
+      conEvento();
+      reservations.reserve.mockReturnValue(of({ id: 'r1' }));
+      const f = await crear();
+      const llamadas = events.list.mock.calls.length;
+
+      f.componentInstance.setCantidad('e1', 3);
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+
+      expect(reservations.reserve).toHaveBeenCalledWith('e1', 3, expect.any(String));
+      expect(events.list.mock.calls.length).toBe(llamadas + 1);
+      expect(f.componentInstance.aviso()).toContain('Reserva confirmada');
+    });
+
+    it('por defecto reserva 1 lugar', async () => {
+      conEvento();
+      reservations.reserve.mockReturnValue(of({ id: 'r1' }));
+      const f = await crear();
+
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+
+      expect(reservations.reserve).toHaveBeenCalledWith('e1', 1, expect.any(String));
+    });
+
+    it.each([
+      ['CUPO_INSUFICIENTE', 'No hay lugares suficientes'],
+      ['LIMITE_SUPERADO', 'máximo de 4'],
+      ['EVENTO_NO_DISPONIBLE', 'cancelado o ya pasó'],
+    ])('con %s muestra el mensaje correspondiente', async (codigo, texto) => {
+      conEvento();
+      reservations.reserve.mockReturnValue(
+        throwError(() => ({ status: 409, error: { error: { code: codigo } } })),
+      );
+      const f = await crear();
+
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+
+      expect(f.componentInstance.error()).toContain(texto);
+    });
+
+    it('reintenta con la misma clave tras un error de red', async () => {
+      conEvento();
+      reservations.reserve.mockReturnValue(throwError(() => ({ status: 0 })));
+      const f = await crear();
+
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+
+      const k1 = reservations.reserve.mock.calls[0][2];
+      const k2 = reservations.reserve.mock.calls[1][2];
+      expect(k1).toBe(k2);
+    });
+
+    it('usa una clave nueva después de una respuesta definitiva', async () => {
+      conEvento();
+      reservations.reserve.mockReturnValue(
+        throwError(() => ({ status: 409, error: { error: { code: 'CUPO_INSUFICIENTE' } } })),
+      );
+      const f = await crear();
+
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+
+      expect(reservations.reserve.mock.calls[0][2]).not.toBe(reservations.reserve.mock.calls[1][2]);
+    });
+
+    it('un evento agotado tiene el botón Reservar deshabilitado', async () => {
+      conEvento(0);
+
+      const f = await crear();
+
+      const boton = Array.from(f.nativeElement.querySelectorAll('button')).find((b: any) =>
+        b.textContent.includes('Reservar'),
+      ) as HTMLButtonElement;
+      expect(boton.disabled).toBe(true);
     });
   });
 });
