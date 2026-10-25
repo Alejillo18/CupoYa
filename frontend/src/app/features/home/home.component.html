@@ -1,9 +1,9 @@
 <main class="auth">
-    <h1>CupoYa</h1>
-    @if (user(); as u) {
-      <p>Sesión iniciada como <strong>{{ u.email }}</strong></p>
-      <p>Rol: <strong>{{ u.role }}</strong></p>
-    }
-    <p><a routerLink="/eventos">Ver eventos</a></p>
-    <button type="button" (click)="logout()">Cerrar sesión</button>
-  </main>
+  <h1>CupoYa</h1>
+  @if (user(); as u) {
+    <p>Sesión iniciada como <strong>{{ u.email }}</strong></p>
+    <p>Rol: <strong>{{ u.role }}</strong></p>
+  }
+  <p><a routerLink="/eventos" class="boton">Ver eventos</a></p>
+  <button type="button" (click)="logout()">Cerrar sesión</button>
+</main>

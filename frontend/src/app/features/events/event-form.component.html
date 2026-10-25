@@ -1,51 +1,51 @@
 <main class="auth">
-    <h1>{{ id() ? 'Editar evento' : 'Nuevo evento' }}</h1>
-    <p><a routerLink="/eventos">Volver al listado</a></p>
-  
-    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <label>
-        Nombre
-        <input type="text" formControlName="name" />
-      </label>
-      @if (form.controls.name.touched && form.controls.name.invalid) {
-        <p class="campo-error">El nombre es obligatorio (máximo 120 caracteres).</p>
-      }
-  
-      <label>
-        Descripción
-        <textarea formControlName="description" rows="3"></textarea>
-      </label>
-  
-      <label>
-        Lugar
-        <input type="text" formControlName="venue" />
-      </label>
-      @if (form.controls.venue.touched && form.controls.venue.invalid) {
-        <p class="campo-error">El lugar es obligatorio (máximo 160 caracteres).</p>
-      }
-  
-      <label>
-        Fecha y hora
-        <input type="datetime-local" formControlName="startsAt" />
-      </label>
-      @if (form.controls.startsAt.touched && form.controls.startsAt.invalid) {
-        <p class="campo-error">Ingresá una fecha y hora futuras.</p>
-      }
-  
-      <label>
-        Cupo total
-        <input type="number" formControlName="totalCapacity" min="1" step="1" />
-      </label>
-      @if (form.controls.totalCapacity.touched && form.controls.totalCapacity.invalid) {
-        <p class="campo-error">El cupo debe ser un entero mayor a cero.</p>
-      }
-  
-      @if (error()) {
-        <p class="error" role="alert">{{ error() }}</p>
-      }
-  
-      <button type="submit" [disabled]="loading()">
-        {{ loading() ? 'Guardando…' : 'Guardar' }}
-      </button>
-    </form>
-  </main>
+  <h1>{{ id() ? 'Editar evento' : 'Nuevo evento' }}</h1>
+  <p><a routerLink="/eventos">Volver al listado</a></p>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <label>
+      Nombre
+      <input type="text" formControlName="name" />
+    </label>
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <p class="campo-error">El nombre es obligatorio (máximo 120 caracteres).</p>
+    }
+
+    <label>
+      Descripción
+      <textarea formControlName="description" rows="3"></textarea>
+    </label>
+
+    <label>
+      Lugar
+      <input type="text" formControlName="venue" />
+    </label>
+    @if (form.controls.venue.touched && form.controls.venue.invalid) {
+      <p class="campo-error">El lugar es obligatorio (máximo 160 caracteres).</p>
+    }
+
+    <label>
+      Fecha y hora
+      <input type="datetime-local" formControlName="startsAt" />
+    </label>
+    @if (form.controls.startsAt.touched && form.controls.startsAt.invalid) {
+      <p class="campo-error">Ingresá una fecha y hora futuras.</p>
+    }
+
+    <label>
+      Cupo total
+      <input type="number" formControlName="totalCapacity" min="1" step="1" />
+    </label>
+    @if (form.controls.totalCapacity.touched && form.controls.totalCapacity.invalid) {
+      <p class="campo-error">El cupo debe ser un entero mayor a cero.</p>
+    }
+
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+
+    <button type="submit" [disabled]="loading()">
+      {{ loading() ? 'Guardando…' : 'Guardar' }}
+    </button>
+  </form>
+</main>

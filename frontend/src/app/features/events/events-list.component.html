@@ -3,7 +3,7 @@
   <p><a routerLink="/inicio">Volver al inicio</a></p>
 
   @if (puedeGestionar()) {
-    <p><a routerLink="/eventos/nuevo">Nuevo evento</a></p>
+    <p><a routerLink="/eventos/nuevo" class="boton">Nuevo evento</a></p>
   }
 
   @if (loading()) {
@@ -47,7 +47,7 @@
             </td>
             @if (puedeGestionar()) {
               <td class="acciones">
-                <a [routerLink]="['/eventos', e.id, 'editar']">Editar</a>
+                <a [routerLink]="['/eventos', e.id, 'editar']" class="boton secundario">Editar</a>
                 <button type="button" (click)="cancelar(e)">Cancelar evento</button>
               </td>
             }
