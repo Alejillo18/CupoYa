@@ -11,7 +11,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:integration": "node --env-file=.env.test node_modules/jest/bin/jest.js --config jest.integration.config.js --runInBand",
-    "dev:cluster": "tsx --env-file=.env src/cluster.ts"
+    "dev:cluster": "tsx --env-file=.env src/cluster.ts",
+    "test:integration:ci": "jest --config jest.integration.config.js --runInBand"
   },
   "keywords": [],
   "author": "",
