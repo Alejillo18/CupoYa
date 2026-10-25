@@ -9,6 +9,7 @@ describe('PrismaRefreshTokenRepository (PostgreSQL real)', () => {
   const familyId = '11111111-1111-4111-8111-111111111111';
 
   beforeEach(async () => {
+    await prisma.report.deleteMany();
     await prisma.reservation.deleteMany();
     await prisma.refreshToken.deleteMany();
     await prisma.user.deleteMany();

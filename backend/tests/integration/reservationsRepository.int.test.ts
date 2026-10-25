@@ -41,21 +41,22 @@ async function invariante(eventId: string) {
   return { disponible: e.availableCapacity, total: e.totalCapacity, confirmadas };
 }
 
+async function limpiar() {
+  await prisma.report.deleteMany();
+  await prisma.reservation.deleteMany();
+  await prisma.event.deleteMany();
+  await prisma.refreshToken.deleteMany();
+  await prisma.user.deleteMany();
+}
+
 describe('PrismaReservationsRepository (PostgreSQL real)', () => {
-  beforeEach(async () => {
-    await prisma.reservation.deleteMany();
-    await prisma.event.deleteMany();
-    await prisma.refreshToken.deleteMany();
-    await prisma.user.deleteMany();
-  });
+  beforeEach(limpiar);
 
   afterAll(async () => {
-    await prisma.reservation.deleteMany();
-    await prisma.event.deleteMany();
-    await prisma.refreshToken.deleteMany();
-    await prisma.user.deleteMany();
+    await limpiar();
     await prisma.$disconnect();
   });
+
   it('reserva y descuenta el cupo', async () => {
     const [u] = await crearUsuarios(1);
     const e = await crearEvento(10);
