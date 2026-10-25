@@ -16,3 +16,17 @@ export function validateBody(schema: ZodSchema) {
     next();
   };
 }
+export function validateQuery(schema: ZodSchema) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    const result = schema.safeParse(req.query);
+    if (!result.success) {
+      const details = result.error.issues.map((i) => ({
+        field: i.path.join('.'),
+        message: i.message,
+      }));
+      return next(new AppError(400, 'VALIDACION', 'Los datos enviados no son válidos.', details));
+    }
+    req.validatedQuery = result.data;
+    next();
+  };
+}

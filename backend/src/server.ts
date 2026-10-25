@@ -6,6 +6,10 @@ import { GoogleAuthVerifier } from './modules/auth/google.verifier.real';
 import { PrismaRefreshTokenRepository } from './modules/auth/refreshToken.repository';
 import { RefreshTokenService } from './modules/auth/refreshToken.service';
 import { TokenService } from './modules/auth/token.service';
+import { PrismaEventRepository } from './modules/events/events.repository';
+import { EventsService } from './modules/events/events.service';
+import { PrismaUsersRepository } from './modules/users/users.repository';
+import { UsersService } from './modules/users/users.service';
 
 const port = Number(process.env.PORT) || 3000;
 const jwtSecret = process.env.JWT_SECRET;
@@ -33,9 +37,13 @@ const authService = new AuthService(
   undefined,
   google,
 );
+const eventsService = new EventsService(new PrismaEventRepository(prisma));
+const usersService = new UsersService(new PrismaUsersRepository(prisma));
 
 createApp({
   authService,
+  eventsService,
+  usersService,
   tokens,
   cookieSecure: process.env.COOKIE_SECURE === 'true',
 }).listen(port, () => {
