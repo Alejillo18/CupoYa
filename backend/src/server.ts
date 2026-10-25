@@ -8,6 +8,8 @@ import { RefreshTokenService } from './modules/auth/refreshToken.service';
 import { TokenService } from './modules/auth/token.service';
 import { PrismaEventRepository } from './modules/events/events.repository';
 import { EventsService } from './modules/events/events.service';
+import { PrismaReservationsRepository } from './modules/reservations/reservations.prisma';
+import { ReservationsService } from './modules/reservations/reservations.service';
 import { PrismaUsersRepository } from './modules/users/users.repository';
 import { UsersService } from './modules/users/users.service';
 
@@ -39,11 +41,13 @@ const authService = new AuthService(
 );
 const eventsService = new EventsService(new PrismaEventRepository(prisma));
 const usersService = new UsersService(new PrismaUsersRepository(prisma));
+const reservationsService = new ReservationsService(new PrismaReservationsRepository(prisma));
 
 createApp({
   authService,
   eventsService,
   usersService,
+  reservationsService,
   tokens,
   cookieSecure: process.env.COOKIE_SECURE === 'true',
 }).listen(port, () => {
