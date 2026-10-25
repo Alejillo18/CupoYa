@@ -49,3 +49,23 @@
   align-items: center;
   gap: 0.5rem;
 }
+.auth.ancho {
+  max-width: 48rem;
+}
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+.tabla th,
+.tabla td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #ddd;
+}
+.paginas {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+}
