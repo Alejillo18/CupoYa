@@ -9,6 +9,7 @@ const nuevo = { name: 'Recital', venue: 'Estadio', startsAt: FUTURO, totalCapaci
 
 describe('PrismaEventRepository (PostgreSQL real)', () => {
   beforeEach(async () => {
+    await prisma.reservation.deleteMany();
     await prisma.event.deleteMany();
   });
 

@@ -50,9 +50,12 @@ describe('PrismaReservationsRepository (PostgreSQL real)', () => {
   });
 
   afterAll(async () => {
+    await prisma.reservation.deleteMany();
+    await prisma.event.deleteMany();
+    await prisma.refreshToken.deleteMany();
+    await prisma.user.deleteMany();
     await prisma.$disconnect();
   });
-
   it('reserva y descuenta el cupo', async () => {
     const [u] = await crearUsuarios(1);
     const e = await crearEvento(10);

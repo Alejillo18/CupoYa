@@ -10,7 +10,7 @@ async function crear(email: string, role: 'USUARIO' | 'OPERADOR' | 'ADMIN' = 'US
 
 describe('PrismaUsersRepository (PostgreSQL real)', () => {
   beforeEach(async () => {
-    await prisma.refreshToken.deleteMany();
+    await prisma.reservation.deleteMany();
     await prisma.user.deleteMany();
   });
 

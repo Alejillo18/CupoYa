@@ -9,6 +9,7 @@ describe('PrismaRefreshTokenRepository (PostgreSQL real)', () => {
   const familyId = '11111111-1111-4111-8111-111111111111';
 
   beforeEach(async () => {
+    await prisma.reservation.deleteMany();
     await prisma.refreshToken.deleteMany();
     await prisma.user.deleteMany();
     const user = await prisma.user.create({ data: { email: 'ana@mail.com', passwordHash: 'h' } });

@@ -6,6 +6,8 @@ const repo = new PrismaUserRepository(prisma);
 
 describe('PrismaUserRepository (PostgreSQL real)', () => {
   beforeEach(async () => {
+    await prisma.reservation.deleteMany();
+    await prisma.refreshToken.deleteMany();
     await prisma.user.deleteMany();
   });
 
