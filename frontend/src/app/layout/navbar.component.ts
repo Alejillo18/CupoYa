@@ -27,6 +27,9 @@ import { AuthService } from '../core/auth.service';
   `,
   styles: `
     mat-toolbar {
+      height: auto;
+      min-height: 64px;
+      padding: 0.5rem 1rem;
       gap: 0.5rem;
       flex-wrap: wrap;
     }
@@ -49,6 +52,13 @@ import { AuthService } from '../core/auth.service';
     }
     .usuario {
       font-size: 0.875rem;
+      overflow-wrap: anywhere;
+    }
+    @media (max-width: 600px) {
+      .espacio {
+        flex-basis: 100%;
+        height: 0;
+      }
     }
   `,
 })

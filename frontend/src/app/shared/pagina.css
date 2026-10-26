@@ -23,6 +23,7 @@ h1 {
 .formulario {
   display: flex;
   flex-direction: column;
+  gap: 0.75rem;
 }
 .formulario mat-form-field {
   width: 100%;

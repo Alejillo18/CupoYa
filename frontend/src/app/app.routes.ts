@@ -1,32 +1,61 @@
 import { Routes } from '@angular/router';
 import { authGuard, guestGuard, roleGuard } from './core/guards';
-import { LoginComponent } from './features/auth/login.component';
-import { RegisterComponent } from './features/auth/register.component';
-import { EventFormComponent } from './features/events/event-form.component';
-import { EventsListComponent } from './features/events/events-list.component';
-import { HomeComponent } from './features/home/home.component';
-import { UsersListComponent } from './features/users/users-list.component';
-import {MyReservationsComponent} from "./features/reservations/my-reservations.component"
-import {ReportsComponent} from "./features/reports/reports.component"
 
 export const routes: Routes = [
-  { path: 'login', component: LoginComponent, canActivate: [guestGuard] },
-  { path: 'registro', component: RegisterComponent, canActivate: [guestGuard] },
-  { path: 'inicio', component: HomeComponent, canActivate: [authGuard] },
-  { path: 'eventos', component: EventsListComponent, canActivate: [authGuard] },
+  {
+    path: 'login',
+    loadComponent: () => import('./features/auth/login.component').then((m) => m.LoginComponent),
+    canActivate: [guestGuard],
+  },
+  {
+    path: 'registro',
+    loadComponent: () =>
+      import('./features/auth/register.component').then((m) => m.RegisterComponent),
+    canActivate: [guestGuard],
+  },
+  {
+    path: 'inicio',
+    loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'eventos',
+    loadComponent: () =>
+      import('./features/events/events-list.component').then((m) => m.EventsListComponent),
+    canActivate: [authGuard],
+  },
   {
     path: 'eventos/nuevo',
-    component: EventFormComponent,
+    loadComponent: () =>
+      import('./features/events/event-form.component').then((m) => m.EventFormComponent),
     canActivate: [roleGuard('OPERADOR', 'ADMIN')],
   },
   {
     path: 'eventos/:id/editar',
-    component: EventFormComponent,
+    loadComponent: () =>
+      import('./features/events/event-form.component').then((m) => m.EventFormComponent),
     canActivate: [roleGuard('OPERADOR', 'ADMIN')],
   },
   { path: '', pathMatch: 'full', redirectTo: 'login' },
-  { path: 'usuarios', component: UsersListComponent, canActivate: [roleGuard('ADMIN')] },
-  { path: 'reservas', component: MyReservationsComponent, canActivate: [authGuard] },
-  { path: 'reportes', component: ReportsComponent, canActivate: [roleGuard('ADMIN')] },
+  {
+    path: 'usuarios',
+    loadComponent: () =>
+      import('./features/users/users-list.component').then((m) => m.UsersListComponent),
+    canActivate: [roleGuard('ADMIN')],
+  },
+  {
+    path: 'reservas',
+    loadComponent: () =>
+      import('./features/reservations/my-reservations.component').then(
+        (m) => m.MyReservationsComponent,
+      ),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'reportes',
+    loadComponent: () =>
+      import('./features/reports/reports.component').then((m) => m.ReportsComponent),
+    canActivate: [roleGuard('ADMIN')],
+  },
   { path: '**', redirectTo: 'login' },
 ];
