@@ -1,45 +1,59 @@
-<main class="auth ancho">
+<main class="pagina">
   <h1>Usuarios</h1>
   <p class="aviso">El cambio de rol rige desde el próximo ingreso del usuario.</p>
 
   @if (loading()) {
-    <p role="status">Cargando…</p>
+    <mat-progress-bar mode="indeterminate" aria-label="Cargando usuarios" />
   }
 
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
+    <button mat-stroked-button type="button" (click)="cargar(page())">Reintentar</button>
   }
 
   @if (items().length > 0) {
-    <table class="tabla">
-      <thead>
-        <tr>
-          <th>Email</th>
-          <th>Rol</th>
-          <th>Estado</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (u of items(); track u.id) {
-          <tr>
-            <td>{{ u.email }}</td>
-            <td>
-              <select [value]="u.role" (change)="alCambiar(u, $event)">
-                @for (r of roles; track r) {
-                  <option [value]="r" [selected]="r === u.role">{{ r }}</option>
-                }
-              </select>
-            </td>
-            <td>{{ u.bloqueado ? 'Bloqueado' : 'Activo' }}</td>
-          </tr>
-        }
-      </tbody>
+    <table mat-table [dataSource]="items()">
+      <ng-container matColumnDef="email">
+        <th mat-header-cell *matHeaderCellDef>Email</th>
+        <td mat-cell *matCellDef="let u">{{ u.email }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="role">
+        <th mat-header-cell *matHeaderCellDef>Rol</th>
+        <td mat-cell *matCellDef="let u">
+          <mat-select
+            class="selector-rol"
+            [value]="u.role"
+            [attr.aria-label]="'Rol de ' + u.email"
+            (selectionChange)="cambiarRol(u, $event.value)"
+          >
+            @for (r of roles; track r) {
+              <mat-option [value]="r">{{ r }}</mat-option>
+            }
+          </mat-select>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="estado">
+        <th mat-header-cell *matHeaderCellDef>Estado</th>
+        <td mat-cell *matCellDef="let u">
+          <span [class.estado-bloqueado]="u.bloqueado">
+            {{ u.bloqueado ? 'Bloqueado' : 'Activo' }}
+          </span>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="columnas"></tr>
+      <tr mat-row *matRowDef="let fila; columns: columnas"></tr>
     </table>
 
-    <nav class="paginas">
-      <button type="button" (click)="anterior()" [disabled]="!hayAnterior()">Anterior</button>
-      <span>Página {{ page() }} de {{ totalPages() }}</span>
-      <button type="button" (click)="siguiente()" [disabled]="!haySiguiente()">Siguiente</button>
-    </nav>
+    <mat-paginator
+      [length]="total()"
+      [pageSize]="pageSize"
+      [pageIndex]="page() - 1"
+      [hidePageSize]="true"
+      (page)="alPaginar($event)"
+      aria-label="Páginas de usuarios"
+    />
   }
 </main>

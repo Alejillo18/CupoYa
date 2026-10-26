@@ -12,6 +12,8 @@ import { authInterceptor } from './core/auth.interceptor';
 import { AuthService } from './core/auth.service';
 import { ConfigService } from './core/config.service';
 import { errorInterceptor } from './core/error.interceptor';
+import { MatPaginatorIntl } from '@angular/material/paginator';
+import { PaginatorEs } from './core/paginator-es';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -20,6 +22,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor])),
     provideAppInitializer(() => firstValueFrom(inject(ConfigService).load())),
     provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession())),
-    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor]))
+    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+    { provide: MatPaginatorIntl, useClass: PaginatorEs },
   ],
 };
