@@ -1,29 +1,44 @@
 :host {
-    display: block;
-  }
-  .pagina {
-    max-width: 60rem;
-    margin: 2rem auto;
-    padding: 0 1rem;
-  }
-  h1 {
-    font-size: 1.75rem;
-    margin: 0 0 1rem;
-  }
-  .aviso {
-    color: #555;
-    font-size: 0.9rem;
-  }
-  .error {
-    color: #b00020;
-  }
-  table {
-    width: 100%;
-  }
-  .estado-bloqueado {
-    color: #b00020;
-    font-weight: 600;
-  }
-  .selector-rol {
-    max-width: 10rem;
-  }
+  display: block;
+}
+.pagina {
+  max-width: 60rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+h1 {
+  font-size: 1.75rem;
+  margin: 0 0 1rem;
+}
+.aviso {
+  color: #555;
+  font-size: 0.9rem;
+}
+.error {
+  color: #b00020;
+}
+.tabla-scroll {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+}
+.estado-bloqueado {
+  color: #b00020;
+  font-weight: 600;
+}
+.agotado {
+  color: #b00020;
+  font-weight: 600;
+}
+.selector-rol {
+  max-width: 10rem;
+}
+.selector-cantidad {
+  width: 4rem;
+}
+.acciones {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}

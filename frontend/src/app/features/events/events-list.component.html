@@ -1,21 +1,17 @@
-<main class="auth ancho">
+<main class="pagina">
   <h1>Eventos</h1>
 
   @if (puedeGestionar()) {
-    <p><a routerLink="/eventos/nuevo" class="boton">Nuevo evento</a></p>
-  }
-
-  @if (aviso()) {
-    <p class="ok" role="status">{{ aviso() }}</p>
+    <p><a mat-flat-button routerLink="/eventos/nuevo">Nuevo evento</a></p>
   }
 
   @if (loading()) {
-    <p role="status">Cargando…</p>
+    <mat-progress-bar mode="indeterminate" aria-label="Cargando eventos" />
   }
 
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
-    <button type="button" (click)="cargar(page())">Reintentar</button>
+    <button mat-stroked-button type="button" (click)="cargar(page())">Reintentar</button>
   }
 
   @if (!loading() && !error() && items().length === 0) {
@@ -23,61 +19,83 @@
   }
 
   @if (items().length > 0) {
-    <table class="tabla">
-      <thead>
-        <tr>
-          <th>Evento</th>
-          <th>Fecha</th>
-          <th>Lugar</th>
-          <th>Lugares</th>
-          <th>Reservar</th>
-          @if (puedeGestionar()) {
-            <th>Acciones</th>
-          }
-        </tr>
-      </thead>
-      <tbody>
-        @for (e of items(); track e.id) {
-          <tr>
-            <td>{{ e.name }}</td>
-            <td>{{ e.startsAt | date: 'dd/MM/yyyy HH:mm' }}</td>
-            <td>{{ e.venue }}</td>
-            <td>
-              @if (e.availableCapacity === 0) {
-                <strong>Agotado</strong>
-              } @else {
-                {{ e.availableCapacity }} / {{ e.totalCapacity }}
-              }
-            </td>
-            <td class="acciones">
-              <select
-                [attr.aria-label]="'Cantidad para ' + e.name"
-                (change)="alElegirCantidad(e.id, $event)"
+    <div class="tabla-scroll">
+      <table mat-table [dataSource]="items()">
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Evento</th>
+          <td mat-cell *matCellDef="let e">{{ e.name }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="startsAt">
+          <th mat-header-cell *matHeaderCellDef>Fecha</th>
+          <td mat-cell *matCellDef="let e">{{ e.startsAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="venue">
+          <th mat-header-cell *matHeaderCellDef>Lugar</th>
+          <td mat-cell *matCellDef="let e">{{ e.venue }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="cupo">
+          <th mat-header-cell *matHeaderCellDef>Lugares</th>
+          <td mat-cell *matCellDef="let e">
+            @if (e.availableCapacity === 0) {
+              <strong class="agotado">Agotado</strong>
+            } @else {
+              {{ e.availableCapacity }} / {{ e.totalCapacity }}
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="reservar">
+          <th mat-header-cell *matHeaderCellDef>Reservar</th>
+          <td mat-cell *matCellDef="let e">
+            <div class="acciones">
+              <mat-select
+                class="selector-cantidad"
+                [value]="cantidadDe(e.id)"
                 [disabled]="e.availableCapacity === 0"
+                [attr.aria-label]="'Cantidad para ' + e.name"
+                (selectionChange)="setCantidad(e.id, $event.value)"
               >
                 @for (n of opciones; track n) {
-                  <option [value]="n" [selected]="n === cantidadDe(e.id)">{{ n }}</option>
+                  <mat-option [value]="n">{{ n }}</mat-option>
                 }
-              </select>
-              <button type="button" (click)="reservar(e)" [disabled]="e.availableCapacity === 0">
+              </mat-select>
+              <button
+                mat-flat-button
+                type="button"
+                (click)="reservar(e)"
+                [disabled]="e.availableCapacity === 0"
+              >
                 Reservar
               </button>
-            </td>
-            @if (puedeGestionar()) {
-              <td class="acciones">
-                <a [routerLink]="['/eventos', e.id, 'editar']" class="boton secundario">Editar</a>
-                <button type="button" (click)="cancelar(e)">Cancelar evento</button>
-              </td>
-            }
-          </tr>
-        }
-      </tbody>
-    </table>
+            </div>
+          </td>
+        </ng-container>
 
-    <nav class="paginas">
-      <button type="button" (click)="anterior()" [disabled]="!hayAnterior()">Anterior</button>
-      <span>Página {{ page() }} de {{ totalPages() }}</span>
-      <button type="button" (click)="siguiente()" [disabled]="!haySiguiente()">Siguiente</button>
-    </nav>
+        <ng-container matColumnDef="acciones">
+          <th mat-header-cell *matHeaderCellDef>Acciones</th>
+          <td mat-cell *matCellDef="let e">
+            <div class="acciones">
+              <a mat-stroked-button [routerLink]="['/eventos', e.id, 'editar']">Editar</a>
+              <button mat-button type="button" (click)="cancelar(e)">Cancelar evento</button>
+            </div>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columnas()"></tr>
+        <tr mat-row *matRowDef="let fila; columns: columnas()"></tr>
+      </table>
+    </div>
+
+    <mat-paginator
+      [length]="total()"
+      [pageSize]="pageSize"
+      [pageIndex]="page() - 1"
+      [hidePageSize]="true"
+      (page)="alPaginar($event)"
+      aria-label="Páginas de eventos"
+    />
   }
 </main>

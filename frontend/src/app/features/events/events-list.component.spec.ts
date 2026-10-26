@@ -6,6 +6,7 @@ import { vi } from 'vitest';
 import { AuthService, Role } from '../../core/auth.service';
 import { ConfirmService } from '../../core/confirm.service';
 import { EventsService } from '../../core/events.service';
+import { NotificationService } from '../../core/notification.service';
 import { ReservationsService } from '../../core/reservations.service';
 import { EventsListComponent } from './events-list.component';
 
@@ -24,6 +25,7 @@ describe('EventsListComponent', () => {
   let events: { list: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn> };
   let reservations: { reserve: ReturnType<typeof vi.fn> };
   let confirmar: { confirm: ReturnType<typeof vi.fn> };
+  let notif: { success: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   const rol = signal<Role | null>('USUARIO');
 
   async function crear() {
@@ -39,6 +41,7 @@ describe('EventsListComponent', () => {
     events = { list: vi.fn(), cancel: vi.fn() };
     reservations = { reserve: vi.fn() };
     confirmar = { confirm: vi.fn() };
+    notif = { success: vi.fn(), error: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -46,6 +49,7 @@ describe('EventsListComponent', () => {
         { provide: AuthService, useValue: { role: rol } },
         { provide: ReservationsService, useValue: reservations },
         { provide: ConfirmService, useValue: confirmar },
+        { provide: NotificationService, useValue: notif },
       ],
     });
   });
@@ -58,7 +62,7 @@ describe('EventsListComponent', () => {
     expect(events.list).toHaveBeenCalledWith(1, 10);
   });
 
-  it('muestra nombre, lugar y cupo disponible', async () => {
+  it('muestra nombre, lugar y cupo disponible en una tabla de Material', async () => {
     events.list.mockReturnValue(
       of({ items: [evento('e1', 'Recital')], total: 1, page: 1, pageSize: 10 }),
     );
@@ -69,6 +73,7 @@ describe('EventsListComponent', () => {
     expect(texto).toContain('Recital');
     expect(texto).toContain('Estadio');
     expect(texto).toContain('40 / 100');
+    expect(f.nativeElement.querySelector('table[mat-table]')).not.toBeNull();
   });
 
   it('muestra "Agotado" cuando no quedan lugares', async () => {
@@ -93,6 +98,7 @@ describe('EventsListComponent', () => {
     events.list.mockReturnValueOnce(throwError(() => ({ status: 500 })));
     const f = await crear();
     expect(f.nativeElement.textContent).toContain('No pudimos cargar los eventos');
+    expect(f.nativeElement.textContent).toContain('Reintentar');
 
     events.list.mockReturnValue(
       of({ items: [evento('e1', 'Recital')], total: 1, page: 1, pageSize: 10 }),
@@ -104,33 +110,19 @@ describe('EventsListComponent', () => {
     expect(f.nativeElement.textContent).not.toContain('No pudimos cargar los eventos');
   });
 
-  it('siguiente pide la página 2 y anterior vuelve a la 1', async () => {
+  it('ofrece un paginador y al cambiar de página pide la elegida', async () => {
     events.list.mockReturnValue(
       of({ items: [evento('e1', 'A')], total: 25, page: 1, pageSize: 10 }),
     );
     const f = await crear();
+    expect(f.nativeElement.querySelector('mat-paginator')).not.toBeNull();
 
     events.list.mockReturnValue(
       of({ items: [evento('e2', 'B')], total: 25, page: 2, pageSize: 10 }),
     );
-    f.componentInstance.siguiente();
+    f.componentInstance.alPaginar({ pageIndex: 1, previousPageIndex: 0, pageSize: 10, length: 25 });
+
     expect(events.list).toHaveBeenLastCalledWith(2, 10);
-
-    f.componentInstance.anterior();
-    expect(events.list).toHaveBeenLastCalledWith(1, 10);
-  });
-
-  it('no avanza más allá de la última página ni retrocede antes de la primera', async () => {
-    events.list.mockReturnValue(
-      of({ items: [evento('e1', 'A')], total: 5, page: 1, pageSize: 10 }),
-    );
-    const f = await crear();
-    const llamadas = events.list.mock.calls.length;
-
-    f.componentInstance.siguiente();
-    f.componentInstance.anterior();
-
-    expect(events.list.mock.calls.length).toBe(llamadas);
   });
 
   describe('gestión (OPERADOR y ADMIN)', () => {
@@ -171,7 +163,7 @@ describe('EventsListComponent', () => {
       expect(f.nativeElement.textContent).toContain('Nuevo evento');
     });
 
-    it('cancelar con confirmación llama a la API y recarga', async () => {
+    it('cancelar con confirmación llama a la API, recarga y avisa', async () => {
       rol.set('OPERADOR');
       conEvento();
       events.cancel.mockReturnValue(of(undefined));
@@ -183,6 +175,7 @@ describe('EventsListComponent', () => {
 
       expect(events.cancel).toHaveBeenCalledWith('e1');
       expect(events.list.mock.calls.length).toBe(llamadas + 1);
+      expect(notif.success).toHaveBeenCalledWith(expect.stringContaining('Recital'));
     });
 
     it('pide confirmación nombrando el evento', async () => {
@@ -209,16 +202,28 @@ describe('EventsListComponent', () => {
       expect(events.cancel).not.toHaveBeenCalled();
     });
 
-    it('si la API falla al cancelar muestra un mensaje', async () => {
+    it('si la API rechaza la cancelación (4xx) notifica el error', async () => {
       rol.set('OPERADOR');
       conEvento();
-      events.cancel.mockReturnValue(throwError(() => ({ status: 500 })));
+      events.cancel.mockReturnValue(throwError(() => ({ status: 409 })));
       confirmar.confirm.mockReturnValue(of(true));
       const f = await crear();
 
       f.componentInstance.cancelar(evento('e1', 'Recital'));
 
-      expect(f.componentInstance.error()).toContain('No pudimos cancelar');
+      expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('No pudimos cancelar'));
+    });
+
+    it.each([0, 429, 500])('con %i no notifica (lo avisa el interceptor)', async (status) => {
+      rol.set('OPERADOR');
+      conEvento();
+      events.cancel.mockReturnValue(throwError(() => ({ status })));
+      confirmar.confirm.mockReturnValue(of(true));
+      const f = await crear();
+
+      f.componentInstance.cancelar(evento('e1', 'Recital'));
+
+      expect(notif.error).not.toHaveBeenCalled();
     });
   });
 
@@ -228,7 +233,7 @@ describe('EventsListComponent', () => {
         of({ items: [evento('e1', 'Recital', disponible)], total: 1, page: 1, pageSize: 10 }),
       );
 
-    it('reserva la cantidad elegida y recarga el listado', async () => {
+    it('reserva la cantidad elegida, recarga el listado y avisa', async () => {
       conEvento();
       reservations.reserve.mockReturnValue(of({ id: 'r1' }));
       const f = await crear();
@@ -239,7 +244,7 @@ describe('EventsListComponent', () => {
 
       expect(reservations.reserve).toHaveBeenCalledWith('e1', 3, expect.any(String));
       expect(events.list.mock.calls.length).toBe(llamadas + 1);
-      expect(f.componentInstance.aviso()).toContain('Reserva confirmada');
+      expect(notif.success).toHaveBeenCalledWith(expect.stringContaining('Reserva confirmada'));
     });
 
     it('por defecto reserva 1 lugar', async () => {
@@ -256,7 +261,7 @@ describe('EventsListComponent', () => {
       ['CUPO_INSUFICIENTE', 'No hay lugares suficientes'],
       ['LIMITE_SUPERADO', 'máximo de 4'],
       ['EVENTO_NO_DISPONIBLE', 'cancelado o ya pasó'],
-    ])('con %s muestra el mensaje correspondiente', async (codigo, texto) => {
+    ])('con %s notifica el mensaje correspondiente', async (codigo, texto) => {
       conEvento();
       reservations.reserve.mockReturnValue(
         throwError(() => ({ status: 409, error: { error: { code: codigo } } })),
@@ -265,7 +270,27 @@ describe('EventsListComponent', () => {
 
       f.componentInstance.reservar(evento('e1', 'Recital'));
 
-      expect(f.componentInstance.error()).toContain(texto);
+      expect(notif.error).toHaveBeenCalledWith(expect.stringContaining(texto));
+    });
+
+    it('con un código desconocido notifica un mensaje genérico', async () => {
+      conEvento();
+      reservations.reserve.mockReturnValue(throwError(() => ({ status: 400 })));
+      const f = await crear();
+
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+
+      expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('Ocurrió un error'));
+    });
+
+    it.each([0, 429, 500])('con %i no notifica (lo avisa el interceptor)', async (status) => {
+      conEvento();
+      reservations.reserve.mockReturnValue(throwError(() => ({ status })));
+      const f = await crear();
+
+      f.componentInstance.reservar(evento('e1', 'Recital'));
+
+      expect(notif.error).not.toHaveBeenCalled();
     });
 
     it('reintenta con la misma clave tras un error de red', async () => {
