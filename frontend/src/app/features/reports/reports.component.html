@@ -1,65 +1,64 @@
 <main class="auth ancho">
-    <h1>Reporte de ocupación</h1>
-    <p><a routerLink="/inicio">Volver al inicio</a></p>
-  
-    <button type="button" (click)="solicitar()" [disabled]="generando()">
-      {{ generando() ? 'Generando…' : 'Solicitar reporte' }}
-    </button>
-  
-    @if (error()) {
-      <p class="error" role="alert">{{ error() }}</p>
+  <h1>Reporte de ocupación</h1>
+
+  <button type="button" (click)="solicitar()" [disabled]="generando()">
+    {{ generando() ? 'Generando…' : 'Solicitar reporte' }}
+  </button>
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+
+  @if (reporte(); as r) {
+    @if (r.status === 'ERROR') {
+      <p class="error" role="alert">
+        El reporte falló: {{ r.errorMessage || 'error desconocido' }}
+      </p>
     }
-  
-    @if (reporte(); as r) {
-      @if (r.status === 'ERROR') {
+
+    @if (r.status === 'LISTO' && r.report) {
+      <p class="ok" role="status">Reporte listo.</p>
+
+      @if (r.report.totals.inconsistentEvents > 0) {
         <p class="error" role="alert">
-          El reporte falló: {{ r.errorMessage || 'error desconocido' }}
+          Atención: hay {{ r.report.totals.inconsistentEvents }} evento(s) con inconsistencia entre
+          cupo disponible y reservas confirmadas.
         </p>
       }
-  
-      @if (r.status === 'LISTO' && r.report) {
-        <p class="ok" role="status">Reporte listo.</p>
-  
-        @if (r.report.totals.inconsistentEvents > 0) {
-          <p class="error" role="alert">
-            Atención: hay {{ r.report.totals.inconsistentEvents }} evento(s) con inconsistencia entre
-            cupo disponible y reservas confirmadas.
-          </p>
-        }
-  
-        <p>
-          <strong>{{ r.report.totals.events }}</strong> eventos ·
-          <strong>{{ r.report.totals.confirmedSeats }}</strong> de
-          <strong>{{ r.report.totals.totalCapacity }}</strong> lugares confirmados ·
-          ocupación global <strong>{{ r.report.totals.occupancyPercent }} %</strong>
-        </p>
-  
-        <button type="button" (click)="descargar()">Descargar CSV</button>
-  
-        <table class="tabla">
-          <thead>
+
+      <p>
+        <strong>{{ r.report.totals.events }}</strong> eventos ·
+        <strong>{{ r.report.totals.confirmedSeats }}</strong> de
+        <strong>{{ r.report.totals.totalCapacity }}</strong> lugares confirmados ·
+        ocupación global <strong>{{ r.report.totals.occupancyPercent }} %</strong>
+      </p>
+
+      <button type="button" (click)="descargar()">Descargar CSV</button>
+
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Evento</th>
+            <th>Fecha</th>
+            <th>Lugar</th>
+            <th>Cupo</th>
+            <th>Confirmados</th>
+            <th>Ocupación</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of r.report.events; track e.id) {
             <tr>
-              <th>Evento</th>
-              <th>Fecha</th>
-              <th>Lugar</th>
-              <th>Cupo</th>
-              <th>Confirmados</th>
-              <th>Ocupación</th>
+              <td>{{ e.name }}</td>
+              <td>{{ e.startsAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+              <td>{{ e.venue }}</td>
+              <td>{{ e.totalCapacity }}</td>
+              <td>{{ e.confirmedSeats }}</td>
+              <td>{{ e.occupancyPercent }} %</td>
             </tr>
-          </thead>
-          <tbody>
-            @for (e of r.report.events; track e.id) {
-              <tr>
-                <td>{{ e.name }}</td>
-                <td>{{ e.startsAt | date: 'dd/MM/yyyy HH:mm' }}</td>
-                <td>{{ e.venue }}</td>
-                <td>{{ e.totalCapacity }}</td>
-                <td>{{ e.confirmedSeats }}</td>
-                <td>{{ e.occupancyPercent }} %</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      }
+          }
+        </tbody>
+      </table>
     }
-  </main>
+  }
+</main>

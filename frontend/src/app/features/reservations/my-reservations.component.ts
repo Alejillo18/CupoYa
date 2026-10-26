@@ -1,6 +1,5 @@
 import { DatePipe } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { ConfirmService } from '../../core/confirm.service';
 import { EventsService } from '../../core/events.service';
@@ -8,7 +7,7 @@ import { Reservation, ReservationsService } from '../../core/reservations.servic
 
 @Component({
   selector: 'app-my-reservations',
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe],
   templateUrl: './my-reservations.component.html',
   styleUrl: '../auth/auth.css',
 })

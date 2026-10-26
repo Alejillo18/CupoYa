@@ -1,13 +1,12 @@
 import { DatePipe } from '@angular/common';
 import { Component, OnDestroy, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { Report, ReportsService } from '../../core/reports.service';
 
 const SONDEO_MS = 2000;
 
 @Component({
   selector: 'app-reports',
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe],
   templateUrl: './reports.component.html',
   styleUrl: '../auth/auth.css',
 })

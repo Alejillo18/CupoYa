@@ -1,46 +1,45 @@
 <main class="auth ancho">
-    <h1>Usuarios</h1>
-    <p><a routerLink="/inicio">Volver al inicio</a></p>
-    <p class="aviso">El cambio de rol rige desde el próximo ingreso del usuario.</p>
-  
-    @if (loading()) {
-      <p role="status">Cargando…</p>
-    }
-  
-    @if (error()) {
-      <p class="error" role="alert">{{ error() }}</p>
-    }
-  
-    @if (items().length > 0) {
-      <table class="tabla">
-        <thead>
+  <h1>Usuarios</h1>
+  <p class="aviso">El cambio de rol rige desde el próximo ingreso del usuario.</p>
+
+  @if (loading()) {
+    <p role="status">Cargando…</p>
+  }
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+
+  @if (items().length > 0) {
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (u of items(); track u.id) {
           <tr>
-            <th>Email</th>
-            <th>Rol</th>
-            <th>Estado</th>
+            <td>{{ u.email }}</td>
+            <td>
+              <select [value]="u.role" (change)="alCambiar(u, $event)">
+                @for (r of roles; track r) {
+                  <option [value]="r" [selected]="r === u.role">{{ r }}</option>
+                }
+              </select>
+            </td>
+            <td>{{ u.bloqueado ? 'Bloqueado' : 'Activo' }}</td>
           </tr>
-        </thead>
-        <tbody>
-          @for (u of items(); track u.id) {
-            <tr>
-              <td>{{ u.email }}</td>
-              <td>
-                <select [value]="u.role" (change)="alCambiar(u, $event)">
-                  @for (r of roles; track r) {
-                    <option [value]="r" [selected]="r === u.role">{{ r }}</option>
-                  }
-                </select>
-              </td>
-              <td>{{ u.bloqueado ? 'Bloqueado' : 'Activo' }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-  
-      <nav class="paginas">
-        <button type="button" (click)="anterior()" [disabled]="!hayAnterior()">Anterior</button>
-        <span>Página {{ page() }} de {{ totalPages() }}</span>
-        <button type="button" (click)="siguiente()" [disabled]="!haySiguiente()">Siguiente</button>
-      </nav>
-    }
-  </main>
+        }
+      </tbody>
+    </table>
+
+    <nav class="paginas">
+      <button type="button" (click)="anterior()" [disabled]="!hayAnterior()">Anterior</button>
+      <span>Página {{ page() }} de {{ totalPages() }}</span>
+      <button type="button" (click)="siguiente()" [disabled]="!haySiguiente()">Siguiente</button>
+    </nav>
+  }
+</main>

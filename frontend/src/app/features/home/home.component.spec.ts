@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService, Role } from '../../core/auth.service';
@@ -13,7 +13,12 @@ describe('HomeComponent', () => {
     role: typeof rol;
     logout: ReturnType<typeof vi.fn>;
   };
-  let router: Router;
+
+  function crear() {
+    const fixture = TestBed.createComponent(HomeComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
 
   beforeEach(() => {
     rol.set('OPERADOR');
@@ -25,41 +30,34 @@ describe('HomeComponent', () => {
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: AuthService, useValue: auth }],
     });
-    router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
   });
 
   it('muestra el email y el rol del usuario', () => {
-    const fixture = TestBed.createComponent(HomeComponent);
-    fixture.detectChanges();
+    const texto = crear().nativeElement.textContent;
 
-    const texto = fixture.nativeElement.textContent;
     expect(texto).toContain('ana@mail.com');
     expect(texto).toContain('OPERADOR');
   });
 
-  it('cerrar sesión llama a logout y navega a /login', () => {
-    const fixture = TestBed.createComponent(HomeComponent);
-    fixture.detectChanges();
+  it('ofrece ir a los eventos y a las reservas', () => {
+    const texto = crear().nativeElement.textContent;
 
-    fixture.componentInstance.logout();
-
-    expect(auth.logout).toHaveBeenCalled();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/login');
+    expect(texto).toContain('Ver eventos');
+    expect(texto).toContain('Mis reservas');
   });
 
-  it('un ADMIN ve el botón Administrar usuarios', () => {
+  it('no tiene su propio botón de cerrar sesión (lo ofrece la barra)', () => {
+    const texto = crear().nativeElement.textContent;
+
+    expect(texto).not.toContain('Cerrar sesión');
+  });
+
+  it('un ADMIN no ve enlaces de administración repetidos (están en la barra)', () => {
     rol.set('ADMIN');
-    const fixture = TestBed.createComponent(HomeComponent);
-    fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Administrar usuarios');
-  });
+    const texto = crear().nativeElement.textContent;
 
-  it('un OPERADOR no ve el botón Administrar usuarios', () => {
-    const fixture = TestBed.createComponent(HomeComponent);
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).not.toContain('Administrar usuarios');
+    expect(texto).not.toContain('Administrar usuarios');
+    expect(texto).not.toContain('Reportes de ocupación');
   });
 });

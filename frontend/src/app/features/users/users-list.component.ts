@@ -1,5 +1,4 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { Role } from '../../core/auth.service';
 import { ManagedUser, UsersService } from '../../core/users.service';
 
@@ -7,7 +6,6 @@ const PAGE_SIZE = 10;
 
 @Component({
   selector: 'app-users-list',
-  imports: [RouterLink],
   templateUrl: './users-list.component.html',
   styleUrl: '../auth/auth.css',
 })
