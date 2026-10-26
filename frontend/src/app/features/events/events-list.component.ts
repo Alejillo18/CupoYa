@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { ConfirmService } from '../../core/confirm.service';
 import { EventItem, EventsService } from '../../core/events.service';
 import { ReservationsService } from '../../core/reservations.service';
 
@@ -25,6 +26,7 @@ export class EventsListComponent implements OnInit {
   private readonly events = inject(EventsService);
   private readonly reservations = inject(ReservationsService);
   private readonly auth = inject(AuthService);
+  private readonly confirmService = inject(ConfirmService);
 
   readonly items = signal<EventItem[]>([]);
   readonly page = signal(1);
@@ -111,10 +113,19 @@ export class EventsListComponent implements OnInit {
   }
 
   cancelar(evento: EventItem): void {
-    if (!window.confirm(`¿Cancelar el evento "${evento.name}"?`)) return;
-    this.events.cancel(evento.id).subscribe({
-      next: () => this.cargar(this.page()),
-      error: () => this.error.set('No pudimos cancelar el evento. Intentá de nuevo.'),
-    });
+    this.confirmService
+      .confirm({
+        titulo: 'Cancelar evento',
+        mensaje: `¿Cancelás el evento "${evento.name}"? Deja de estar disponible para reservar.`,
+        confirmar: 'Sí, cancelar evento',
+        cancelar: 'Volver',
+      })
+      .subscribe((ok) => {
+        if (!ok) return;
+        this.events.cancel(evento.id).subscribe({
+          next: () => this.cargar(this.page()),
+          error: () => this.error.set('No pudimos cancelar el evento. Intentá de nuevo.'),
+        });
+      });
   }
 }

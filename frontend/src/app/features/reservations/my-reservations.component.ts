@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
+import { ConfirmService } from '../../core/confirm.service';
 import { EventsService } from '../../core/events.service';
 import { Reservation, ReservationsService } from '../../core/reservations.service';
 
@@ -14,6 +15,7 @@ import { Reservation, ReservationsService } from '../../core/reservations.servic
 export class MyReservationsComponent implements OnInit {
   private readonly reservations = inject(ReservationsService);
   private readonly events = inject(EventsService);
+  private readonly confirmService = inject(ConfirmService);
 
   readonly items = signal<Reservation[]>([]);
   readonly nombres = signal<Record<string, string>>({});
@@ -45,12 +47,21 @@ export class MyReservationsComponent implements OnInit {
   }
 
   cancelar(reserva: Reservation): void {
-    if (!window.confirm('¿Cancelar esta reserva?')) return;
-    this.error.set(null);
-    this.reservations.cancel(reserva.id).subscribe({
-      next: (r) => this.items.update((l) => l.map((x) => (x.id === r.id ? r : x))),
-      error: () => this.error.set('No pudimos cancelar la reserva. Intentá de nuevo.'),
-    });
+    this.confirmService
+      .confirm({
+        titulo: 'Cancelar reserva',
+        mensaje: `¿Cancelás tu reserva de ${reserva.quantity} lugar(es) para "${this.nombreDe(reserva.eventId)}"? Los lugares vuelven a estar disponibles.`,
+        confirmar: 'Sí, cancelar reserva',
+        cancelar: 'Volver',
+      })
+      .subscribe((ok) => {
+        if (!ok) return;
+        this.error.set(null);
+        this.reservations.cancel(reserva.id).subscribe({
+          next: (r) => this.items.update((l) => l.map((x) => (x.id === r.id ? r : x))),
+          error: () => this.error.set('No pudimos cancelar la reserva. Intentá de nuevo.'),
+        });
+      });
   }
 
   // Un pedido por evento distinto; si alguno falla se muestra el id abreviado.

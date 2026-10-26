@@ -4,6 +4,7 @@ import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService, Role } from '../../core/auth.service';
+import { ConfirmService } from '../../core/confirm.service';
 import { EventsService } from '../../core/events.service';
 import { ReservationsService } from '../../core/reservations.service';
 import { EventsListComponent } from './events-list.component';
@@ -22,6 +23,7 @@ const evento = (id: string, name: string, disponible = 40) => ({
 describe('EventsListComponent', () => {
   let events: { list: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn> };
   let reservations: { reserve: ReturnType<typeof vi.fn> };
+  let confirmar: { confirm: ReturnType<typeof vi.fn> };
   const rol = signal<Role | null>('USUARIO');
 
   async function crear() {
@@ -36,12 +38,14 @@ describe('EventsListComponent', () => {
     rol.set('USUARIO');
     events = { list: vi.fn(), cancel: vi.fn() };
     reservations = { reserve: vi.fn() };
+    confirmar = { confirm: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: EventsService, useValue: events },
         { provide: AuthService, useValue: { role: rol } },
         { provide: ReservationsService, useValue: reservations },
+        { provide: ConfirmService, useValue: confirmar },
       ],
     });
   });
@@ -171,7 +175,7 @@ describe('EventsListComponent', () => {
       rol.set('OPERADOR');
       conEvento();
       events.cancel.mockReturnValue(of(undefined));
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      confirmar.confirm.mockReturnValue(of(true));
       const f = await crear();
       const llamadas = events.list.mock.calls.length;
 
@@ -181,10 +185,23 @@ describe('EventsListComponent', () => {
       expect(events.list.mock.calls.length).toBe(llamadas + 1);
     });
 
+    it('pide confirmación nombrando el evento', async () => {
+      rol.set('OPERADOR');
+      conEvento();
+      confirmar.confirm.mockReturnValue(of(false));
+      const f = await crear();
+
+      f.componentInstance.cancelar(evento('e1', 'Recital'));
+
+      expect(confirmar.confirm).toHaveBeenCalledWith(
+        expect.objectContaining({ mensaje: expect.stringContaining('Recital') }),
+      );
+    });
+
     it('si el usuario no confirma, no cancela', async () => {
       rol.set('OPERADOR');
       conEvento();
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      confirmar.confirm.mockReturnValue(of(false));
       const f = await crear();
 
       f.componentInstance.cancelar(evento('e1', 'Recital'));
@@ -196,7 +213,7 @@ describe('EventsListComponent', () => {
       rol.set('OPERADOR');
       conEvento();
       events.cancel.mockReturnValue(throwError(() => ({ status: 500 })));
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      confirmar.confirm.mockReturnValue(of(true));
       const f = await crear();
 
       f.componentInstance.cancelar(evento('e1', 'Recital'));
