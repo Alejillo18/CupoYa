@@ -1,0 +1,4 @@
+.notif-ok .mdc-snackbar__surface { background: #1b5e20 !important; }
+.notif-error .mdc-snackbar__surface { background: #b00020 !important; }
+.notif-info .mdc-snackbar__surface { background: #37474f !important; }
+.notif-ok, .notif-error, .notif-info { --mat-snack-bar-button-color: #fff; --mdc-snackbar-supporting-text-color: #fff; }
