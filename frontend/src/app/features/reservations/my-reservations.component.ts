@@ -1,21 +1,28 @@
 import { DatePipe } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTableModule } from '@angular/material/table';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { ConfirmService } from '../../core/confirm.service';
+import { mensajeGlobal } from '../../core/error.interceptor';
 import { EventsService } from '../../core/events.service';
+import { NotificationService } from '../../core/notification.service';
 import { Reservation, ReservationsService } from '../../core/reservations.service';
 
 @Component({
   selector: 'app-my-reservations',
-  imports: [DatePipe],
+  imports: [DatePipe, MatTableModule, MatButtonModule, MatProgressBarModule],
   templateUrl: './my-reservations.component.html',
-  styleUrl: '../auth/auth.css',
+  styleUrl: '../../shared/pagina.css',
 })
 export class MyReservationsComponent implements OnInit {
   private readonly reservations = inject(ReservationsService);
   private readonly events = inject(EventsService);
   private readonly confirmService = inject(ConfirmService);
+  private readonly notif = inject(NotificationService);
 
+  readonly columnas = ['evento', 'lugares', 'estado', 'fecha', 'acciones'];
   readonly items = signal<Reservation[]>([]);
   readonly nombres = signal<Record<string, string>>({});
   readonly loading = signal(false);
@@ -55,10 +62,16 @@ export class MyReservationsComponent implements OnInit {
       })
       .subscribe((ok) => {
         if (!ok) return;
-        this.error.set(null);
         this.reservations.cancel(reserva.id).subscribe({
-          next: (r) => this.items.update((l) => l.map((x) => (x.id === r.id ? r : x))),
-          error: () => this.error.set('No pudimos cancelar la reserva. Intentá de nuevo.'),
+          next: (r) => {
+            this.items.update((l) => l.map((x) => (x.id === r.id ? r : x)));
+            this.notif.success('Reserva cancelada.');
+          },
+          error: (err) => {
+            // Red, 429 y 5xx ya los avisa el interceptor.
+            if (mensajeGlobal(err)) return;
+            this.notif.error('No pudimos cancelar la reserva. Intentá de nuevo.');
+          },
         });
       });
   }
@@ -80,4 +93,4 @@ export class MyReservationsComponent implements OnInit {
       this.nombres.set(mapa);
     });
   }
-}
+} 

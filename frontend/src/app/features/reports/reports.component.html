@@ -1,12 +1,12 @@
-<main class="auth ancho">
+<main class="pagina">
   <h1>Reporte de ocupación</h1>
 
-  <button type="button" (click)="solicitar()" [disabled]="generando()">
+  <button mat-flat-button type="button" (click)="solicitar()" [disabled]="generando()">
     {{ generando() ? 'Generando…' : 'Solicitar reporte' }}
   </button>
 
-  @if (error()) {
-    <p class="error" role="alert">{{ error() }}</p>
+  @if (generando()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Generando reporte" />
   }
 
   @if (reporte(); as r) {
@@ -17,48 +17,58 @@
     }
 
     @if (r.status === 'LISTO' && r.report) {
-      <p class="ok" role="status">Reporte listo.</p>
-
       @if (r.report.totals.inconsistentEvents > 0) {
-        <p class="error" role="alert">
+        <div class="advertencia" role="alert">
           Atención: hay {{ r.report.totals.inconsistentEvents }} evento(s) con inconsistencia entre
           cupo disponible y reservas confirmadas.
-        </p>
+        </div>
       }
 
-      <p>
+      <p class="resumen">
         <strong>{{ r.report.totals.events }}</strong> eventos ·
         <strong>{{ r.report.totals.confirmedSeats }}</strong> de
         <strong>{{ r.report.totals.totalCapacity }}</strong> lugares confirmados ·
         ocupación global <strong>{{ r.report.totals.occupancyPercent }} %</strong>
       </p>
 
-      <button type="button" (click)="descargar()">Descargar CSV</button>
+      <button mat-stroked-button type="button" (click)="descargar()">Descargar CSV</button>
 
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th>Evento</th>
-            <th>Fecha</th>
-            <th>Lugar</th>
-            <th>Cupo</th>
-            <th>Confirmados</th>
-            <th>Ocupación</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (e of r.report.events; track e.id) {
-            <tr>
-              <td>{{ e.name }}</td>
-              <td>{{ e.startsAt | date: 'dd/MM/yyyy HH:mm' }}</td>
-              <td>{{ e.venue }}</td>
-              <td>{{ e.totalCapacity }}</td>
-              <td>{{ e.confirmedSeats }}</td>
-              <td>{{ e.occupancyPercent }} %</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <div class="tabla-scroll">
+        <table mat-table [dataSource]="r.report.events">
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Evento</th>
+            <td mat-cell *matCellDef="let e">{{ e.name }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="startsAt">
+            <th mat-header-cell *matHeaderCellDef>Fecha</th>
+            <td mat-cell *matCellDef="let e">{{ e.startsAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="venue">
+            <th mat-header-cell *matHeaderCellDef>Lugar</th>
+            <td mat-cell *matCellDef="let e">{{ e.venue }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="totalCapacity">
+            <th mat-header-cell *matHeaderCellDef>Cupo</th>
+            <td mat-cell *matCellDef="let e">{{ e.totalCapacity }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="confirmedSeats">
+            <th mat-header-cell *matHeaderCellDef>Confirmados</th>
+            <td mat-cell *matCellDef="let e">{{ e.confirmedSeats }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="occupancy">
+            <th mat-header-cell *matHeaderCellDef>Ocupación</th>
+            <td mat-cell *matCellDef="let e">{{ e.occupancyPercent }} %</td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="columnas"></tr>
+          <tr mat-row *matRowDef="let fila; columns: columnas"></tr>
+        </table>
+      </div>
     }
   }
 </main>

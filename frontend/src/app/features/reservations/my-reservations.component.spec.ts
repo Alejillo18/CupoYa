@@ -4,6 +4,7 @@ import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { ConfirmService } from '../../core/confirm.service';
 import { EventsService } from '../../core/events.service';
+import { NotificationService } from '../../core/notification.service';
 import { ReservationsService } from '../../core/reservations.service';
 import { MyReservationsComponent } from './my-reservations.component';
 
@@ -21,6 +22,7 @@ describe('MyReservationsComponent', () => {
   let reservations: { listMine: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn> };
   let events: { get: ReturnType<typeof vi.fn> };
   let confirmar: { confirm: ReturnType<typeof vi.fn> };
+  let notif: { success: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   async function crear() {
     const fixture = TestBed.createComponent(MyReservationsComponent);
@@ -34,17 +36,19 @@ describe('MyReservationsComponent', () => {
     reservations = { listMine: vi.fn(), cancel: vi.fn() };
     events = { get: vi.fn().mockReturnValue(of({ id: 'e1', name: 'Recital' })) };
     confirmar = { confirm: vi.fn() };
+    notif = { success: vi.fn(), error: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: ReservationsService, useValue: reservations },
         { provide: EventsService, useValue: events },
         { provide: ConfirmService, useValue: confirmar },
+        { provide: NotificationService, useValue: notif },
       ],
     });
   });
 
-  it('muestra el nombre del evento, la cantidad y el estado', async () => {
+  it('muestra el nombre del evento, la cantidad y el estado en una tabla de Material', async () => {
     reservations.listMine.mockReturnValue(of([reserva('r1')]));
 
     const f = await crear();
@@ -53,6 +57,7 @@ describe('MyReservationsComponent', () => {
     expect(t).toContain('Recital');
     expect(t).toContain('2');
     expect(t).toContain('CONFIRMADA');
+    expect(f.nativeElement.querySelector('table[mat-table]')).not.toBeNull();
   });
 
   it('pide una sola vez el evento aunque haya varias reservas del mismo', async () => {
@@ -80,12 +85,18 @@ describe('MyReservationsComponent', () => {
     expect(f.nativeElement.textContent).toContain('Todavía no tenés reservas');
   });
 
-  it('ante un error de carga muestra mensaje', async () => {
-    reservations.listMine.mockReturnValue(throwError(() => ({ status: 500 })));
-
+  it('ante un error de carga muestra mensaje y permite reintentar', async () => {
+    reservations.listMine.mockReturnValueOnce(throwError(() => ({ status: 500 })));
     const f = await crear();
-
     expect(f.nativeElement.textContent).toContain('No pudimos cargar tus reservas');
+    expect(f.nativeElement.textContent).toContain('Reintentar');
+
+    reservations.listMine.mockReturnValue(of([reserva('r1')]));
+    f.componentInstance.cargar();
+    f.detectChanges();
+
+    expect(f.nativeElement.textContent).toContain('Recital');
+    expect(f.nativeElement.textContent).not.toContain('No pudimos cargar tus reservas');
   });
 
   it('solo las confirmadas tienen botón de cancelar', async () => {
@@ -97,7 +108,7 @@ describe('MyReservationsComponent', () => {
     expect(botones.length).toBe(1);
   });
 
-  it('cancelar con confirmación llama a la API y actualiza la fila', async () => {
+  it('cancelar con confirmación llama a la API, actualiza la fila y avisa', async () => {
     reservations.listMine.mockReturnValue(of([reserva('r1')]));
     reservations.cancel.mockReturnValue(of(reserva('r1', 'CANCELADA')));
     confirmar.confirm.mockReturnValue(of(true));
@@ -107,6 +118,7 @@ describe('MyReservationsComponent', () => {
 
     expect(reservations.cancel).toHaveBeenCalledWith('r1');
     expect(f.componentInstance.items()[0].status).toBe('CANCELADA');
+    expect(notif.success).toHaveBeenCalledWith(expect.stringContaining('Reserva cancelada'));
   });
 
   it('pide confirmación nombrando el evento', async () => {
@@ -131,15 +143,30 @@ describe('MyReservationsComponent', () => {
     expect(reservations.cancel).not.toHaveBeenCalled();
   });
 
-  it('si la cancelación falla muestra un mensaje y conserva el estado', async () => {
+  it('si la API rechaza la cancelación (4xx) notifica y conserva el estado', async () => {
     reservations.listMine.mockReturnValue(of([reserva('r1')]));
-    reservations.cancel.mockReturnValue(throwError(() => ({ status: 500 })));
+    reservations.cancel.mockReturnValue(throwError(() => ({ status: 409 })));
     confirmar.confirm.mockReturnValue(of(true));
     const f = await crear();
 
     f.componentInstance.cancelar(f.componentInstance.items()[0]);
 
-    expect(f.componentInstance.error()).toContain('No pudimos cancelar');
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('No pudimos cancelar'));
     expect(f.componentInstance.items()[0].status).toBe('CONFIRMADA');
   });
+
+  it.each([0, 429, 500])(
+    'con %i no notifica (lo avisa el interceptor) y conserva el estado',
+    async (status) => {
+      reservations.listMine.mockReturnValue(of([reserva('r1')]));
+      reservations.cancel.mockReturnValue(throwError(() => ({ status })));
+      confirmar.confirm.mockReturnValue(of(true));
+      const f = await crear();
+
+      f.componentInstance.cancelar(f.componentInstance.items()[0]);
+
+      expect(notif.error).not.toHaveBeenCalled();
+      expect(f.componentInstance.items()[0].status).toBe('CONFIRMADA');
+    },
+  );
 });

@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
+import { NotificationService } from '../../core/notification.service';
 import { ReportsService } from '../../core/reports.service';
 import { ReportsComponent } from './reports.component';
 
@@ -55,6 +56,7 @@ describe('ReportsComponent', () => {
     get: ReturnType<typeof vi.fn>;
     downloadCsv: ReturnType<typeof vi.fn>;
   };
+  let notif: { success: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   function crear() {
     const fixture = TestBed.createComponent(ReportsComponent);
@@ -65,8 +67,13 @@ describe('ReportsComponent', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     reports = { request: vi.fn(), get: vi.fn(), downloadCsv: vi.fn() };
+    notif = { success: vi.fn(), error: vi.fn() };
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), { provide: ReportsService, useValue: reports }],
+      providers: [
+        provideRouter([]),
+        { provide: ReportsService, useValue: reports },
+        { provide: NotificationService, useValue: notif },
+      ],
     });
   });
 
@@ -107,7 +114,18 @@ describe('ReportsComponent', () => {
     expect(f.componentInstance.reporte()?.status).toBe('LISTO');
   });
 
-  it('muestra la tabla y los totales cuando está listo', () => {
+  it('avisa con una notificación cuando el reporte está listo', () => {
+    reports.request.mockReturnValue(of(enCurso('PENDIENTE')));
+    reports.get.mockReturnValue(of(listo()));
+    const f = crear();
+
+    f.componentInstance.solicitar();
+    vi.advanceTimersByTime(2000);
+
+    expect(notif.success).toHaveBeenCalledWith(expect.stringContaining('Reporte listo'));
+  });
+
+  it('muestra la tabla de Material y los totales cuando está listo', () => {
     reports.request.mockReturnValue(of(enCurso('PENDIENTE')));
     reports.get.mockReturnValue(of(listo()));
     const f = crear();
@@ -120,6 +138,7 @@ describe('ReportsComponent', () => {
     expect(t).toContain('Recital');
     expect(t).toContain('Estadio');
     expect(t).toContain('Descargar CSV');
+    expect(f.nativeElement.querySelector('table[mat-table]')).not.toBeNull();
   });
 
   it('avisa si hay eventos inconsistentes', () => {
@@ -161,13 +180,50 @@ describe('ReportsComponent', () => {
     expect(f.componentInstance.generando()).toBe(false);
   });
 
-  it('si falla el pedido inicial muestra un mensaje', () => {
-    reports.request.mockReturnValue(throwError(() => ({ status: 500 })));
+  it('si el pedido inicial es rechazado (4xx) notifica y libera el botón', () => {
+    reports.request.mockReturnValue(throwError(() => ({ status: 403 })));
     const f = crear();
 
     f.componentInstance.solicitar();
 
-    expect(f.componentInstance.error()).toContain('No pudimos solicitar');
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('No pudimos solicitar'));
+    expect(f.componentInstance.generando()).toBe(false);
+  });
+
+  it.each([0, 429, 500])('si el pedido inicial falla con %i no notifica (lo avisa el interceptor)', (status) => {
+    reports.request.mockReturnValue(throwError(() => ({ status })));
+    const f = crear();
+
+    f.componentInstance.solicitar();
+
+    expect(notif.error).not.toHaveBeenCalled();
+    expect(f.componentInstance.generando()).toBe(false);
+  });
+
+  it('si falla el sondeo (4xx) notifica, deja de consultar y libera el botón', () => {
+    reports.request.mockReturnValue(of(enCurso('PENDIENTE')));
+    reports.get.mockReturnValue(throwError(() => ({ status: 404 })));
+    const f = crear();
+
+    f.componentInstance.solicitar();
+    vi.advanceTimersByTime(2000);
+    const llamadas = reports.get.mock.calls.length;
+    vi.advanceTimersByTime(10_000);
+
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('consultar'));
+    expect(f.componentInstance.generando()).toBe(false);
+    expect(reports.get.mock.calls.length).toBe(llamadas);
+  });
+
+  it('si falla el sondeo con 500 no notifica pero deja de consultar', () => {
+    reports.request.mockReturnValue(of(enCurso('PENDIENTE')));
+    reports.get.mockReturnValue(throwError(() => ({ status: 500 })));
+    const f = crear();
+
+    f.componentInstance.solicitar();
+    vi.advanceTimersByTime(2000);
+
+    expect(notif.error).not.toHaveBeenCalled();
     expect(f.componentInstance.generando()).toBe(false);
   });
 
@@ -186,6 +242,19 @@ describe('ReportsComponent', () => {
 
     expect(reports.downloadCsv).toHaveBeenCalledWith('r1');
     expect(clic).toHaveBeenCalled();
+  });
+
+  it('si la descarga es rechazada (4xx) notifica el error', () => {
+    reports.request.mockReturnValue(of(enCurso('PENDIENTE')));
+    reports.get.mockReturnValue(of(listo()));
+    reports.downloadCsv.mockReturnValue(throwError(() => ({ status: 404 })));
+    const f = crear();
+    f.componentInstance.solicitar();
+    vi.advanceTimersByTime(2000);
+
+    f.componentInstance.descargar();
+
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('No pudimos descargar'));
   });
 
   it('al destruirse el componente se detiene el sondeo', () => {

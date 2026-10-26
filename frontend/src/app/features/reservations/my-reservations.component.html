@@ -1,13 +1,13 @@
-<main class="auth ancho">
+<main class="pagina">
   <h1>Mis reservas</h1>
 
   @if (loading()) {
-    <p role="status">Cargando…</p>
+    <mat-progress-bar mode="indeterminate" aria-label="Cargando reservas" />
   }
 
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
-    <button type="button" (click)="cargar()">Reintentar</button>
+    <button mat-stroked-button type="button" (click)="cargar()">Reintentar</button>
   }
 
   @if (!loading() && !error() && items().length === 0) {
@@ -15,33 +15,49 @@
   }
 
   @if (items().length > 0) {
-    <table class="tabla">
-      <thead>
-        <tr>
-          <th>Evento</th>
-          <th>Lugares</th>
-          <th>Estado</th>
-          <th>Reservada el</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (r of items(); track r.id) {
-          <tr>
-            <td>{{ nombreDe(r.eventId) }}</td>
-            <td>{{ r.quantity }}</td>
-            <td>{{ r.status }}</td>
-            <td>{{ r.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
-            <td>
-              @if (r.status === 'CONFIRMADA') {
-                <button type="button" class="cancelar" (click)="cancelar(r)">
-                  Cancelar reserva
-                </button>
-              }
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
+    <div class="tabla-scroll">
+      <table mat-table [dataSource]="items()">
+        <ng-container matColumnDef="evento">
+          <th mat-header-cell *matHeaderCellDef>Evento</th>
+          <td mat-cell *matCellDef="let r">{{ nombreDe(r.eventId) }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="lugares">
+          <th mat-header-cell *matHeaderCellDef>Lugares</th>
+          <td mat-cell *matCellDef="let r">{{ r.quantity }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="estado">
+          <th mat-header-cell *matHeaderCellDef>Estado</th>
+          <td mat-cell *matCellDef="let r">
+            <span
+              class="chip"
+              [class.chip-ok]="r.status === 'CONFIRMADA'"
+              [class.chip-cancelada]="r.status === 'CANCELADA'"
+              >{{ r.status }}</span
+            >
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="fecha">
+          <th mat-header-cell *matHeaderCellDef>Reservada el</th>
+          <td mat-cell *matCellDef="let r">{{ r.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="acciones">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let r">
+            @if (r.status === 'CONFIRMADA') {
+              <button mat-button type="button" class="cancelar" (click)="cancelar(r)">
+                Cancelar reserva
+              </button>
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columnas"></tr>
+        <tr mat-row *matRowDef="let fila; columns: columnas"></tr>
+      </table>
+    </div>
   }
 </main>
