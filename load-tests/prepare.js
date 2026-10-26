@@ -8,15 +8,19 @@ const jwt = back('jsonwebtoken');
 
 const USUARIOS = Number(process.env.LOAD_USERS) || 2000;
 const CUPO = Number(process.env.LOAD_CAPACITY) || 5000;
+// Las fases largas (soak) superan la hora: por defecto 2 horas
+const TTL = Number(process.env.LOAD_TOKEN_TTL) || 7200;
+const ADMIN_EMAIL = 'admin@carga.test';
 
 async function main() {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error('Falta JWT_SECRET (backend/.env)');
   const prisma = new PrismaClient();
 
-  // Limpieza de corridas anteriores (solo datos de carga)
+  // Limpieza de corridas anteriores (solo datos de carga).
+  // El admin se conserva: puede tener reportes asociados.
   const viejos = await prisma.user.findMany({
-    where: { email: { endsWith: '@carga.test' } },
+    where: { email: { endsWith: '@carga.test' }, NOT: { email: ADMIN_EMAIL } },
     select: { id: true },
   });
   const ids = viejos.map((u) => u.id);
@@ -28,6 +32,13 @@ async function main() {
 
   // Un solo hash reutilizado: 2.000 hashes con bcrypt tardarían minutos
   const passwordHash = bcrypt.hashSync('Carga12345', 10);
+
+  const admin = await prisma.user.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: { role: 'ADMIN' },
+    create: { email: ADMIN_EMAIL, passwordHash, role: 'ADMIN' },
+  });
+
   await prisma.user.createMany({
     data: Array.from({ length: USUARIOS }, (_, i) => ({
       email: `carga${i}@carga.test`,
@@ -35,7 +46,7 @@ async function main() {
     })),
   });
   const usuarios = await prisma.user.findMany({
-    where: { email: { endsWith: '@carga.test' } },
+    where: { email: { endsWith: '@carga.test' }, NOT: { email: ADMIN_EMAIL } },
     orderBy: { email: 'asc' },
   });
 
@@ -49,15 +60,20 @@ async function main() {
     },
   });
 
-  const tokens = usuarios.map((u) =>
-    jwt.sign({ role: u.role }, secret, { subject: u.id, expiresIn: 3600, algorithm: 'HS256' }),
-  );
+  const firmar = (u) =>
+    jwt.sign({ role: u.role }, secret, { subject: u.id, expiresIn: TTL, algorithm: 'HS256' });
 
   fs.writeFileSync(
     path.join(__dirname, 'data.json'),
-    JSON.stringify({ eventId: evento.id, tokens }),
+    JSON.stringify({
+      eventId: evento.id,
+      tokens: usuarios.map(firmar),
+      adminToken: firmar(admin),
+    }),
   );
-  console.log(`Listo: ${usuarios.length} usuarios, evento ${evento.id} con ${CUPO} lugares.`);
+  console.log(
+    `Listo: ${usuarios.length} usuarios + 1 admin, evento ${evento.id} con ${CUPO} lugares, tokens de ${TTL}s.`,
+  );
   await prisma.$disconnect();
 }
 
