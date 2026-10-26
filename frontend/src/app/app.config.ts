@@ -11,6 +11,7 @@ import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
 import { AuthService } from './core/auth.service';
 import { ConfigService } from './core/config.service';
+import { errorInterceptor } from './core/error.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -19,5 +20,6 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor])),
     provideAppInitializer(() => firstValueFrom(inject(ConfigService).load())),
     provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession())),
+    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor]))
   ],
 };
