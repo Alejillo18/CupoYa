@@ -1,0 +1,38 @@
+:host {
+    display: block;
+  }
+  .pagina {
+    max-width: 26rem;
+    margin: 3rem auto;
+    padding: 0 1rem;
+  }
+  mat-card {
+    padding: 1rem;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin: 0 0 1rem;
+  }
+  form {
+    display: flex;
+    flex-direction: column;
+  }
+  mat-form-field {
+    width: 100%;
+  }
+  button[type='submit'] {
+    width: 100%;
+  }
+  .ok {
+    color: #1b5e20;
+    margin: 0 0 1rem;
+  }
+  .separador {
+    text-align: center;
+    color: #666;
+    margin: 1rem 0 0.5rem;
+  }
+  .pie {
+    text-align: center;
+    margin: 1rem 0 0;
+  }

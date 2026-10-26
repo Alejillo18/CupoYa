@@ -1,22 +1,36 @@
+import { Component, inject, input, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
-import { Component, inject, input, signal } from '@angular/core';
+import { mensajeGlobal } from '../../core/error.interceptor';
+import { NotificationService } from '../../core/notification.service';
 import { GoogleButtonComponent } from './google-button.component';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, RouterLink, GoogleButtonComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    GoogleButtonComponent,
+  ],
   templateUrl: './login.component.html',
-  styleUrl: './auth.css',
+  styleUrl: './auth-form.css',
 })
 export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly notif = inject(NotificationService);
 
   readonly loading = signal(false);
-  readonly error = signal<string | null>(null);
   readonly registrado = input<string | undefined>();
 
   readonly form = this.fb.nonNullable.group({
@@ -31,7 +45,6 @@ export class LoginComponent {
     }
 
     this.loading.set(true);
-    this.error.set(null);
     const { email, password } = this.form.getRawValue();
 
     this.auth.login(email, password).subscribe({
@@ -41,7 +54,9 @@ export class LoginComponent {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(this.mensaje(err?.status));
+        // Red, 429 y 5xx ya los avisa el interceptor: acá solo los errores de negocio.
+        if (mensajeGlobal(err)) return;
+        this.notif.error(this.mensaje(err?.status));
       },
     });
   }

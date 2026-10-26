@@ -3,10 +3,12 @@ import { provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth.service';
+import { NotificationService } from '../../core/notification.service';
 import { RegisterComponent } from './register.component';
 
 describe('RegisterComponent', () => {
   let auth: { register: ReturnType<typeof vi.fn> };
+  let notif: { error: ReturnType<typeof vi.fn> };
   let router: Router;
 
   function crear() {
@@ -26,8 +28,13 @@ describe('RegisterComponent', () => {
 
   beforeEach(() => {
     auth = { register: vi.fn() };
+    notif = { error: vi.fn() };
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), { provide: AuthService, useValue: auth }],
+      providers: [
+        provideRouter([]),
+        { provide: AuthService, useValue: auth },
+        { provide: NotificationService, useValue: notif },
+      ],
     });
     router = TestBed.inject(Router);
     vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
@@ -65,6 +72,17 @@ describe('RegisterComponent', () => {
     expect(f.componentInstance.form.hasError('noCoinciden')).toBe(true);
   });
 
+  it('muestra "no coinciden" en pantalla cuando se intenta enviar', () => {
+    const f = crear();
+    completar(f, 'ana@mail.com', 'Clave1234', 'Otra12345');
+
+    f.componentInstance.submit();
+    f.detectChanges();
+    f.detectChanges();
+
+    expect(f.nativeElement.textContent).toContain('no coinciden');
+  });
+
   it('no llama a la API si el formulario es inválido', () => {
     const f = crear();
     completar(f, 'no-es-email', 'Clave1234');
@@ -85,24 +103,48 @@ describe('RegisterComponent', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/login?registrado=1');
   });
 
-  it('con 409 muestra que el email ya existe', () => {
+  it('con 409 notifica que el email ya existe', () => {
     auth.register.mockReturnValue(throwError(() => ({ status: 409 })));
     const f = crear();
     completar(f, 'ana@mail.com', 'Clave1234');
 
     f.componentInstance.submit();
 
-    expect(f.componentInstance.error()).toBe('Ya existe una cuenta con ese email.');
+    expect(notif.error).toHaveBeenCalledWith('Ya existe una cuenta con ese email.');
     expect(f.componentInstance.loading()).toBe(false);
   });
 
-  it('con otro error muestra un mensaje genérico', () => {
-    auth.register.mockReturnValue(throwError(() => ({ status: 500 })));
+  it('con 400 notifica que revise los datos', () => {
+    auth.register.mockReturnValue(throwError(() => ({ status: 400 })));
     const f = crear();
     completar(f, 'ana@mail.com', 'Clave1234');
 
     f.componentInstance.submit();
 
-    expect(f.componentInstance.error()).toContain('Ocurrió un error');
+    expect(notif.error).toHaveBeenCalledWith('Revisá los datos ingresados.');
   });
+
+  it('con otro error 4xx notifica un mensaje genérico', () => {
+    auth.register.mockReturnValue(throwError(() => ({ status: 403 })));
+    const f = crear();
+    completar(f, 'ana@mail.com', 'Clave1234');
+
+    f.componentInstance.submit();
+
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('Ocurrió un error'));
+  });
+
+  it.each([0, 429, 500, 503])(
+    'con %i no notifica (ya lo avisa el interceptor) y libera el botón',
+    (status) => {
+      auth.register.mockReturnValue(throwError(() => ({ status })));
+      const f = crear();
+      completar(f, 'ana@mail.com', 'Clave1234');
+
+      f.componentInstance.submit();
+
+      expect(notif.error).not.toHaveBeenCalled();
+      expect(f.componentInstance.loading()).toBe(false);
+    },
+  );
 });

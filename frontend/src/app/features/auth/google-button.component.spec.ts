@@ -4,11 +4,13 @@ import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth.service';
 import { GoogleAuthService } from '../../core/google-auth.service';
+import { NotificationService } from '../../core/notification.service';
 import { GoogleButtonComponent } from './google-button.component';
 
 describe('GoogleButtonComponent', () => {
   let auth: { loginWithGoogle: ReturnType<typeof vi.fn> };
   let google: { renderButton: ReturnType<typeof vi.fn> };
+  let notif: { error: ReturnType<typeof vi.fn> };
   let router: Router;
 
   async function crear() {
@@ -21,11 +23,13 @@ describe('GoogleButtonComponent', () => {
   beforeEach(() => {
     auth = { loginWithGoogle: vi.fn() };
     google = { renderButton: vi.fn().mockResolvedValue(true) };
+    notif = { error: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: AuthService, useValue: auth },
         { provide: GoogleAuthService, useValue: google },
+        { provide: NotificationService, useValue: notif },
       ],
     });
     router = TestBed.inject(Router);
@@ -49,30 +53,39 @@ describe('GoogleButtonComponent', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/inicio');
   });
 
-  it('con 401 muestra el mensaje de Google', async () => {
+  it('con 401 notifica el mensaje de Google', async () => {
     auth.loginWithGoogle.mockReturnValue(throwError(() => ({ status: 401 })));
-    const fixture = await crear();
+    await crear();
 
     google.renderButton.mock.calls[0][1]('malo');
 
-    expect(fixture.componentInstance.error()).toBe('No pudimos verificar tu cuenta de Google.');
+    expect(notif.error).toHaveBeenCalledWith('No pudimos verificar tu cuenta de Google.');
   });
 
-  it('con 423 muestra cuenta bloqueada', async () => {
+  it('con 423 notifica cuenta bloqueada', async () => {
     auth.loginWithGoogle.mockReturnValue(throwError(() => ({ status: 423 })));
-    const fixture = await crear();
+    await crear();
 
     google.renderButton.mock.calls[0][1]('tok');
 
-    expect(fixture.componentInstance.error()).toContain('bloqueada');
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('bloqueada'));
   });
 
-  it('con otro error muestra un mensaje genérico', async () => {
-    auth.loginWithGoogle.mockReturnValue(throwError(() => ({ status: 500 })));
-    const fixture = await crear();
+  it('con otro error 4xx notifica un mensaje genérico', async () => {
+    auth.loginWithGoogle.mockReturnValue(throwError(() => ({ status: 400 })));
+    await crear();
 
     google.renderButton.mock.calls[0][1]('tok');
 
-    expect(fixture.componentInstance.error()).toContain('Ocurrió un error');
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('Ocurrió un error'));
+  });
+
+  it('con 500 no notifica (ya lo avisa el interceptor)', async () => {
+    auth.loginWithGoogle.mockReturnValue(throwError(() => ({ status: 500 })));
+    await crear();
+
+    google.renderButton.mock.calls[0][1]('tok');
+
+    expect(notif.error).not.toHaveBeenCalled();
   });
 });

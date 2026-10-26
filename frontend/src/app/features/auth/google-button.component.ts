@@ -1,27 +1,31 @@
-import { AfterViewInit, Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, inject, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { mensajeGlobal } from '../../core/error.interceptor';
 import { GoogleAuthService } from '../../core/google-auth.service';
+import { NotificationService } from '../../core/notification.service';
 
 @Component({
   selector: 'app-google-button',
   template: `
     <div class="google">
       <div #contenedor></div>
-      @if (error()) {
-        <p class="error" role="alert">{{ error() }}</p>
-      }
     </div>
   `,
-  styleUrl: './auth.css',
+  styles: `
+    .google {
+      display: flex;
+      justify-content: center;
+    }
+  `,
 })
 export class GoogleButtonComponent implements AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly google = inject(GoogleAuthService);
   private readonly router = inject(Router);
+  private readonly notif = inject(NotificationService);
 
   private readonly contenedor = viewChild.required<ElementRef<HTMLElement>>('contenedor');
-  readonly error = signal<string | null>(null);
 
   ngAfterViewInit(): void {
     void this.google.renderButton(this.contenedor().nativeElement, (idToken) =>
@@ -30,10 +34,13 @@ export class GoogleButtonComponent implements AfterViewInit {
   }
 
   private ingresar(idToken: string): void {
-    this.error.set(null);
     this.auth.loginWithGoogle(idToken).subscribe({
       next: () => this.router.navigateByUrl('/inicio'),
-      error: (err) => this.error.set(this.mensaje(err?.status)),
+      error: (err) => {
+        // Red, 429 y 5xx ya los avisa el interceptor: acá solo los errores de negocio.
+        if (mensajeGlobal(err)) return;
+        this.notif.error(this.mensaje(err?.status));
+      },
     });
   }
 

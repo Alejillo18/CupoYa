@@ -6,8 +6,15 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { ErrorStateMatcher } from '@angular/material/core';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { mensajeGlobal } from '../../core/error.interceptor';
+import { NotificationService } from '../../core/notification.service';
 import { GoogleButtonComponent } from './google-button.component';
 
 function coinciden(group: AbstractControl): ValidationErrors | null {
@@ -18,17 +25,25 @@ function coinciden(group: AbstractControl): ValidationErrors | null {
 
 @Component({
   selector: 'app-register',
-  imports: [ReactiveFormsModule, RouterLink, GoogleButtonComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    GoogleButtonComponent,
+  ],
   templateUrl: './register.component.html',
-  styleUrl: './auth.css',
+  styleUrl: './auth-form.css',
 })
 export class RegisterComponent {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly notif = inject(NotificationService);
 
   readonly loading = signal(false);
-  readonly error = signal<string | null>(null);
 
   readonly form = this.fb.nonNullable.group(
     {
@@ -48,6 +63,12 @@ export class RegisterComponent {
     { validators: coinciden },
   );
 
+  // El error "no coinciden" es del grupo, no del campo: este matcher lo muestra en "Repetir contraseña".
+  readonly matcherConfirm: ErrorStateMatcher = {
+    isErrorState: (control) =>
+      !!control && control.touched && (control.invalid || this.form.hasError('noCoinciden')),
+  };
+
   submit(): void {
     if (this.form.invalid || this.loading()) {
       this.form.markAllAsTouched();
@@ -55,7 +76,6 @@ export class RegisterComponent {
     }
 
     this.loading.set(true);
-    this.error.set(null);
     const { email, password } = this.form.getRawValue();
 
     this.auth.register(email, password).subscribe({
@@ -65,7 +85,9 @@ export class RegisterComponent {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(this.mensaje(err?.status));
+        // Red, 429 y 5xx ya los avisa el interceptor: acá solo los errores de negocio.
+        if (mensajeGlobal(err)) return;
+        this.notif.error(this.mensaje(err?.status));
       },
     });
   }
