@@ -1,51 +1,46 @@
-<main class="auth">
-  <h1>{{ id() ? 'Editar evento' : 'Nuevo evento' }}</h1>
-  <p><a routerLink="/eventos">Volver al listado</a></p>
+<main class="pagina pagina-angosta">
+  <mat-card>
+    <mat-card-content>
+      <h1>{{ id() ? 'Editar evento' : 'Nuevo evento' }}</h1>
 
-  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-    <label>
-      Nombre
-      <input type="text" formControlName="name" />
-    </label>
-    @if (form.controls.name.touched && form.controls.name.invalid) {
-      <p class="campo-error">El nombre es obligatorio (máximo 120 caracteres).</p>
-    }
+      <form class="formulario" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <mat-form-field appearance="outline">
+          <mat-label>Nombre</mat-label>
+          <input matInput type="text" formControlName="name" />
+          <mat-error>El nombre es obligatorio (máximo 120 caracteres).</mat-error>
+        </mat-form-field>
 
-    <label>
-      Descripción
-      <textarea formControlName="description" rows="3"></textarea>
-    </label>
+        <mat-form-field appearance="outline">
+          <mat-label>Descripción</mat-label>
+          <textarea matInput formControlName="description" rows="3"></textarea>
+          <mat-error>La descripción admite hasta 2000 caracteres.</mat-error>
+        </mat-form-field>
 
-    <label>
-      Lugar
-      <input type="text" formControlName="venue" />
-    </label>
-    @if (form.controls.venue.touched && form.controls.venue.invalid) {
-      <p class="campo-error">El lugar es obligatorio (máximo 160 caracteres).</p>
-    }
+        <mat-form-field appearance="outline">
+          <mat-label>Lugar</mat-label>
+          <input matInput type="text" formControlName="venue" />
+          <mat-error>El lugar es obligatorio (máximo 160 caracteres).</mat-error>
+        </mat-form-field>
 
-    <label>
-      Fecha y hora
-      <input type="datetime-local" formControlName="startsAt" />
-    </label>
-    @if (form.controls.startsAt.touched && form.controls.startsAt.invalid) {
-      <p class="campo-error">Ingresá una fecha y hora futuras.</p>
-    }
+        <mat-form-field appearance="outline">
+          <mat-label>Fecha y hora</mat-label>
+          <input matInput type="datetime-local" formControlName="startsAt" />
+          <mat-error>Ingresá una fecha y hora futuras.</mat-error>
+        </mat-form-field>
 
-    <label>
-      Cupo total
-      <input type="number" formControlName="totalCapacity" min="1" step="1" />
-    </label>
-    @if (form.controls.totalCapacity.touched && form.controls.totalCapacity.invalid) {
-      <p class="campo-error">El cupo debe ser un entero mayor a cero.</p>
-    }
+        <mat-form-field appearance="outline">
+          <mat-label>Cupo total</mat-label>
+          <input matInput type="number" formControlName="totalCapacity" min="1" step="1" />
+          <mat-error>El cupo debe ser un entero mayor a cero.</mat-error>
+        </mat-form-field>
 
-    @if (error()) {
-      <p class="error" role="alert">{{ error() }}</p>
-    }
-
-    <button type="submit" [disabled]="loading()">
-      {{ loading() ? 'Guardando…' : 'Guardar' }}
-    </button>
-  </form>
+        <div class="acciones">
+          <button mat-flat-button type="submit" [disabled]="loading()">
+            {{ loading() ? 'Guardando…' : 'Guardar' }}
+          </button>
+          <a mat-button routerLink="/eventos">Volver al listado</a>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
 </main>

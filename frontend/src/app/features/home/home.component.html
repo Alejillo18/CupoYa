@@ -1,9 +1,15 @@
-<main class="auth">
-  <h1>CupoYa</h1>
-  @if (user(); as u) {
-    <p>Sesión iniciada como <strong>{{ u.email }}</strong></p>
-    <p>Rol: <strong>{{ u.role }}</strong></p>
-  }
-  <p><a routerLink="/eventos" class="boton">Ver eventos</a></p>
-  <p><a routerLink="/reservas" class="boton secundario">Mis reservas</a></p>
+<main class="pagina pagina-angosta">
+  <mat-card>
+    <mat-card-content>
+      <h1>CupoYa</h1>
+      @if (user(); as u) {
+        <p>Sesión iniciada como <strong>{{ u.email }}</strong></p>
+        <p>Rol: <strong>{{ u.role }}</strong></p>
+      }
+      <div class="acciones">
+        <a mat-flat-button routerLink="/eventos">Ver eventos</a>
+        <a mat-stroked-button routerLink="/reservas">Mis reservas</a>
+      </div>
+    </mat-card-content>
+  </mat-card>
 </main>

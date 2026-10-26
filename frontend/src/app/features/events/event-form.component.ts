@@ -6,8 +6,14 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { Router, RouterLink } from '@angular/router';
+import { mensajeGlobal } from '../../core/error.interceptor';
 import { EventsService } from '../../core/events.service';
+import { NotificationService } from '../../core/notification.service';
 
 function fechaFutura(control: AbstractControl): ValidationErrors | null {
   const v = control.value as string;
@@ -31,20 +37,27 @@ const MENSAJES: Record<string, string> = {
 
 @Component({
   selector: 'app-event-form',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+  ],
   templateUrl: './event-form.component.html',
-  styleUrl: '../auth/auth.css',
+  styleUrl: '../../shared/pagina.css',
 })
 export class EventFormComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly events = inject(EventsService);
   private readonly router = inject(Router);
+  private readonly notif = inject(NotificationService);
 
   // Llega desde la ruta /eventos/:id/editar (withComponentInputBinding)
   readonly id = input<string | undefined>();
 
   readonly loading = signal(false);
-  readonly error = signal<string | null>(null);
 
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(120)]],
@@ -69,7 +82,7 @@ export class EventFormComponent implements OnInit {
           startsAt: aInputLocal(e.startsAt),
           totalCapacity: e.totalCapacity,
         }),
-      error: (err) => this.error.set(this.mensaje(err)),
+      error: (err) => this.avisarError(err),
     });
   }
 
@@ -80,7 +93,6 @@ export class EventFormComponent implements OnInit {
     }
 
     this.loading.set(true);
-    this.error.set(null);
     const v = this.form.getRawValue();
     const datos = {
       name: v.name.trim(),
@@ -95,17 +107,20 @@ export class EventFormComponent implements OnInit {
     llamada.subscribe({
       next: () => {
         this.loading.set(false);
+        this.notif.success(id ? 'Evento actualizado.' : 'Evento creado.');
         this.router.navigateByUrl('/eventos');
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(this.mensaje(err));
+        this.avisarError(err);
       },
     });
   }
 
-  private mensaje(err: any): string {
+  // Red, 429 y 5xx ya los avisa el interceptor: acá solo los errores de negocio.
+  private avisarError(err: any): void {
+    if (mensajeGlobal(err)) return;
     const codigo = err?.error?.error?.code as string | undefined;
-    return (codigo && MENSAJES[codigo]) || 'Ocurrió un error inesperado. Intentá de nuevo.';
+    this.notif.error((codigo && MENSAJES[codigo]) || 'Ocurrió un error inesperado. Intentá de nuevo.');
   }
 }
