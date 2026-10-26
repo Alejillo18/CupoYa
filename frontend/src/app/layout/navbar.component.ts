@@ -57,47 +57,52 @@ import { AuthService } from '../core/auth.service';
     }
   `,
   styles: `
-    mat-toolbar {
-      height: auto;
-      min-height: 64px;
-      padding: 0.25rem 1rem;
-      gap: 0.5rem;
-    }
-    .marca {
-      font-weight: 700;
-      color: inherit;
-      text-decoration: none;
-      margin-right: 1rem;
-    }
-    .enlaces {
-      display: flex;
-      gap: 0.25rem;
-    }
-    .activo {
-      text-decoration: underline;
-    }
-    .espacio {
-      flex: 1 1 auto;
-    }
-    .usuario {
-      font-size: 0.875rem;
-    }
-    .solo-angosto {
+  mat-toolbar {
+    height: auto;
+    min-height: 64px;
+    padding: 0.25rem 1rem;
+    gap: 0.5rem;
+  }
+  .marca {
+    font-weight: 700;
+    color: inherit;
+    text-decoration: none;
+    margin-right: 1rem;
+  }
+  .enlaces {
+    display: flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+  .activo {
+    text-decoration: underline;
+  }
+  .espacio {
+    flex: 1 1 auto;
+  }
+  .usuario {
+    font-size: 0.875rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .solo-angosto {
+    display: none;
+  }
+  .menu-usuario {
+    font-size: 0.8rem;
+    opacity: 0.8;
+  }
+  @media (max-width: 1100px) {
+    .solo-ancho {
       display: none;
     }
-    .menu-usuario {
-      font-size: 0.8rem;
-      opacity: 0.8;
+    .solo-angosto {
+      display: inline-flex;
     }
-    @media (max-width: 720px) {
-      .solo-ancho {
-        display: none;
-      }
-      .solo-angosto {
-        display: inline-flex;
-      }
-    }
-  `,
+  }
+`,
 })
 export class NavbarComponent {
   private readonly auth = inject(AuthService);
