@@ -79,4 +79,29 @@ describe('NavbarComponent', () => {
     expect(logout).toHaveBeenCalled();
     expect(nav).toHaveBeenCalledWith('/login');
   });
+  it('tiene un botón de menú para pantallas chicas', () => {
+    const f = crear();
+
+    expect(f.nativeElement.querySelector('button[aria-label="Menú"]')).toBeTruthy();
+  });
+
+  it('el menú desplegable muestra enlaces, usuario y permite cerrar sesión', async () => {
+    const nav = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    const f = crear();
+
+    (f.nativeElement.querySelector('button[aria-label="Menú"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    await f.whenStable();
+
+    const items = Array.from(document.querySelectorAll('.mat-mdc-menu-item')) as HTMLElement[];
+    const textos = items.map((i) => i.textContent ?? '');
+    expect(textos.some((t) => t.includes('Eventos'))).toBe(true);
+    expect(textos.some((t) => t.includes('Mis reservas'))).toBe(true);
+    expect(textos.some((t) => t.includes('@'))).toBe(true);
+
+    items.find((i) => (i.textContent ?? '').includes('Cerrar sesión'))!.click();
+
+    expect(logout).toHaveBeenCalled();
+    expect(nav).toHaveBeenCalledWith('/login');
+  });
 });
