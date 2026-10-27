@@ -4,6 +4,29 @@ import { AppError } from '../errors/AppError';
 
 const SATURACION_BD = new Set(['P2028', 'P2024']);
 
+
+const SIN_CONEXION_BD = new Set(['P1001', 'P1002', 'P1008', 'P1017']);
+
+const BD_NO_LISTA =
+  /the database system is (starting up|not yet accepting connections|shutting down|in recovery mode)/i;
+
+function esBaseNoDisponible(err: Error): boolean {
+  if (err instanceof Prisma.PrismaClientInitializationError) return true;
+  if (err instanceof Prisma.PrismaClientKnownRequestError) return SIN_CONEXION_BD.has(err.code);
+  if (err instanceof Prisma.PrismaClientUnknownRequestError) return BD_NO_LISTA.test(err.message);
+  return false;
+}
+
+function servicioNoDisponible(
+  res: Response,
+  codigo: string,
+  mensaje: string,
+  reintentarEnSeg: number,
+): void {
+  res.setHeader('Retry-After', String(reintentarEnSeg));
+  res.status(503).json({ error: { code: codigo, message: mensaje, details: [] } });
+}
+
 export function notFoundHandler(_req: Request, res: Response): void {
   res.status(404).json({
     error: {
@@ -37,15 +60,24 @@ export function errorHandler(
     return;
   }
   if (err instanceof Prisma.PrismaClientKnownRequestError && SATURACION_BD.has(err.code)) {
+    // Una línea corta: bajo carga, el stack completo por cada pedido inunda el log.
     console.warn(`Base de datos saturada (${err.code}).`);
-    res.setHeader('Retry-After', '1');
-    res.status(503).json({
-      error: {
-        code: 'SERVICIO_SATURADO',
-        message: 'El sistema está muy ocupado. Probá de nuevo en unos segundos.',
-        details: [],
-      },
-    });
+    servicioNoDisponible(
+      res,
+      'SERVICIO_SATURADO',
+      'El sistema está muy ocupado. Probá de nuevo en unos segundos.',
+      1,
+    );
+    return;
+  }
+  if (esBaseNoDisponible(err)) {
+    console.warn('Base de datos no disponible.');
+    servicioNoDisponible(
+      res,
+      'SERVICIO_NO_DISPONIBLE',
+      'El servicio no está disponible. Probá de nuevo en unos segundos.',
+      2,
+    );
     return;
   }
   console.error(err);
