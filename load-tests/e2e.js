@@ -2,7 +2,7 @@ import http from 'k6/http';
 import exec from 'k6/execution';
 import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
-import { Counter, Rate } from 'k6/metrics';
+import { Counter, Rate, Trend } from 'k6/metrics';
 
 const data = new SharedArray('data', () => [JSON.parse(open('./data.json'))]);
 const { eventId, tokens, adminToken } = data[0];
@@ -21,6 +21,8 @@ const reservasOk = new Counter('reservas_confirmadas');
 const reservasRechazadas = new Counter('reservas_rechazadas');
 const cancelacionesOk = new Counter('cancelaciones_ok');
 const reportesListos = new Counter('reportes_completados');
+const reportesFallidos = new Counter('reportes_fallidos');
+const reporteTiempo = new Trend('reporte_tiempo_ms', true);
 
 // [segundos, VUs objetivo]
 const PERFILES = {
@@ -58,6 +60,12 @@ const umbrales = {
   'http_req_duration{tipo:lectura}': ['p(95)<500'],
   'http_req_duration{tipo:reserva}': ['p(95)<800'],
 };
+if (FASE === 'mixta' || FASE === 'soak') {
+  // El módulo de reportes (worker_threads) también tiene que funcionar bajo carga
+  umbrales.reportes_completados = ['count>0'];
+  umbrales.reportes_fallidos = ['count==0'];
+  umbrales.reporte_tiempo_ms = ['p(95)<5000'];
+}
 if (FASE === 'rampa') {
   // Corta sola al romperse: el escalón en que corta es el punto de quiebre
   umbrales['http_req_duration{tipo:lectura}'] = [
@@ -68,14 +76,30 @@ if (FASE === 'rampa') {
   ];
 }
 if (FASE === 'spike') {
-  umbrales['http_req_duration{tipo:lectura}'] = ['p(95)<2000'];
-  umbrales['http_req_duration{tipo:reserva}'] = ['p(95)<3000'];
+  // Durante el pico se toleran errores y lentitud; lo que se exige es recuperarse
+  umbrales.errores_servidor = ['rate<0.5'];
+  umbrales['http_req_duration{tipo:lectura}'] = ['p(95)<30000'];
+  umbrales['http_req_duration{tipo:reserva}'] = ['p(95)<30000'];
+  umbrales['errores_servidor{etapa:pre}'] = ['rate<0.001'];
+  umbrales['errores_servidor{etapa:post}'] = ['rate<0.001'];
+  umbrales['http_req_duration{etapa:post}'] = ['p(95)<500'];
 }
 
 export const options = { scenarios: escenarios, thresholds: umbrales };
 
-function registrar(res) {
-  erroresServidor.add(res.status === 0 || res.status >= 500);
+// Etapa del spike según el tiempo transcurrido (perfil: 0-30 pre, 30-110 pico,
+// 110-130 transición para que drene la cola, 130+ post = recuperación)
+function etapaActual() {
+  if (FASE !== 'spike') return 'unica';
+  const t = exec.instance.currentTestRunDuration / 1000;
+  if (t < 30) return 'pre';
+  if (t < 110) return 'pico';
+  if (t < 130) return 'transicion';
+  return 'post';
+}
+
+function registrar(res, etapa) {
+  erroresServidor.add(res.status === 0 || res.status >= 500, { etapa });
   if (res.status === 401 || res.status === 403) erroresAuth.add(1);
   if (res.status === 429) limitados.add(1);
 }
@@ -113,11 +137,15 @@ export function setup() {
 let ultimaReserva = null; // estado por VU
 
 export default function () {
+  const etapa = etapaActual();
   const i = (__VU - 1) % tokens.length;
   const headers = { Authorization: `Bearer ${tokens[i]}`, 'Content-Type': 'application/json' };
 
-  const eventos = http.get(`${BASE}/api/v1/events`, { headers, tags: { tipo: 'lectura' } });
-  registrar(eventos);
+  const eventos = http.get(`${BASE}/api/v1/events`, {
+    headers,
+    tags: { tipo: 'lectura', etapa },
+  });
+  registrar(eventos, etapa);
   check(eventos, { 'eventos: 200': (r) => r.status === 200 });
 
   const dado = Math.random();
@@ -129,9 +157,9 @@ export default function () {
     const res = http.post(
       `${BASE}/api/v1/events/${eventId}/reservations`,
       JSON.stringify({ quantity: 1 + Math.floor(Math.random() * 2) }),
-      { headers: h, tags: { tipo: 'reserva' } },
+      { headers: h, tags: { tipo: 'reserva', etapa } },
     );
-    registrar(res);
+    registrar(res, etapa);
     if (res.status === 201) {
       reservasOk.add(1);
       const b = json(res);
@@ -140,54 +168,83 @@ export default function () {
       reservasRechazadas.add(1);
     }
   } else if (dado < 0.75) {
-    const res = http.get(`${BASE}/api/v1/reservations/me`, { headers, tags: { tipo: 'lectura' } });
-    registrar(res);
+    const res = http.get(`${BASE}/api/v1/reservations/me`, {
+      headers,
+      tags: { tipo: 'lectura', etapa },
+    });
+    registrar(res, etapa);
     check(res, { 'mis reservas: 200': (r) => r.status === 200 });
   } else if (dado < 0.9) {
     if (!ultimaReserva) {
-      const mias = http.get(`${BASE}/api/v1/reservations/me`, { headers, tags: { tipo: 'lectura' } });
-      registrar(mias);
+      const mias = http.get(`${BASE}/api/v1/reservations/me`, {
+        headers,
+        tags: { tipo: 'lectura', etapa },
+      });
+      registrar(mias, etapa);
       const confirmada = lista(json(mias)).find((r) => r.status === 'CONFIRMADA');
       ultimaReserva = confirmada ? confirmada.id : null;
     }
     if (ultimaReserva) {
+      // La etiqueta "name" agrupa todas las cancelaciones bajo un solo endpoint
       const res = http.post(`${BASE}/api/v1/reservations/${ultimaReserva}/cancel`, null, {
         headers,
-        tags: { tipo: 'cancelacion' },
+        tags: { tipo: 'cancelacion', etapa, name: 'POST /reservations/:id/cancel' },
       });
-      registrar(res);
+      registrar(res, etapa);
       if (res.status >= 200 && res.status < 300) cancelacionesOk.add(1);
       ultimaReserva = null;
     }
   } else {
-    const res = http.get(`${BASE}/api/v1/auth/me`, { headers, tags: { tipo: 'lectura' } });
-    registrar(res);
+    const res = http.get(`${BASE}/api/v1/auth/me`, {
+      headers,
+      tags: { tipo: 'lectura', etapa },
+    });
+    registrar(res, etapa);
   }
 
   sleep(1 + Math.random() * 2);
 }
 
-// Un ADMIN pide un reporte cada ~30 s y espera a que termine (worker_threads)
+// Un ADMIN pide un reporte cada ~30 s y espera a que termine (worker_threads).
+// La respuesta anida los datos bajo "report": { id, status, finishedAt, ... }
 export function admin() {
+  const etapa = 'unica';
   const headers = { Authorization: `Bearer ${adminToken}` };
-  const pedido = http.post(`${BASE}/api/v1/reports`, null, { headers, tags: { tipo: 'reporte' } });
-  registrar(pedido);
+  const pedido = http.post(`${BASE}/api/v1/reports`, null, {
+    headers,
+    tags: { tipo: 'reporte', etapa },
+  });
+  registrar(pedido, etapa);
   const aceptado = check(pedido, { 'reporte aceptado (202)': (r) => r.status === 202 });
-  if (aceptado) {
-    const id = (json(pedido) || {}).id;
-    for (let n = 0; id && n < 30; n++) {
-      sleep(1);
+
+  const cuerpo = aceptado ? json(pedido) : null;
+  const id = cuerpo && cuerpo.report ? cuerpo.report.id : null;
+
+  if (id) {
+    const inicio = Date.now();
+    let terminado = false;
+    for (let n = 0; n < 60 && !terminado; n++) {
+      sleep(0.5);
       const estado = http.get(`${BASE}/api/v1/reports/${id}`, {
         headers,
-        tags: { tipo: 'reporte' },
+        tags: { tipo: 'reporte', etapa, name: 'GET /reports/:id' },
       });
-      registrar(estado);
-      const st = (json(estado) || {}).status;
-      if (st && st !== 'PENDIENTE' && st !== 'PROCESANDO') {
-        reportesListos.add(1);
-        break;
+      registrar(estado, etapa);
+      const body = json(estado);
+      const r = body ? body.report : null;
+      if (r && r.finishedAt) {
+        terminado = true;
+        if (r.status === 'LISTO') {
+          reportesListos.add(1);
+          reporteTiempo.add(Date.now() - inicio);
+        } else {
+          reportesFallidos.add(1);
+        }
       }
     }
+    if (!terminado) reportesFallidos.add(1); // no terminó en 30 s
+  } else if (aceptado) {
+    reportesFallidos.add(1); // aceptado, pero la respuesta no trae el id esperado
   }
   sleep(25);
 }

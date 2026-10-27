@@ -9,4 +9,6 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 *.log
-load-tests/data.json
+load-tests/data.jsonload-tests/data.json
+load-tests/caos-sonda.csv
+load-tests/k6-caos.txt
