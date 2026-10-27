@@ -265,6 +265,28 @@ docker compose exec db psql -U cupoya -d cupoya -c "CREATE DATABASE cupoya_test;
 
 Estado actual: backend 244 unitarias y 52 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis); frontend 210. Total: 506.
 
+### Cobertura de pruebas
+
+| Suite | Sentencias | Ramas | Funciones | Líneas |
+|---|---|---|---|---|
+| Backend, unitarias (244) | 94,62 % | 91,95 % | 91,04 % | 94,49 % |
+| Backend, integración (52) | 95,86 % | 80,48 % | 91,11 % | 95,68 % |
+| Frontend (210) | 94,65 % | 94,39 % | 83,78 % | 96,06 % |
+
+- Las de integración miden solo los archivos que ejercitan (repositorios, pool de reportes y limitador con Redis); se leen junto con las unitarias, no en su lugar.
+- En el frontend, la cobertura de funciones baja porque V8 cuenta como funciones los manejadores de eventos de las plantillas HTML. Los puntos bajos reales son `app.routes.ts` (las rutas de carga diferida se verifican por su configuración, no se navega a cada una) y `google-auth.service.ts` (carga del script externo de Google).
+
+Para medirla (en PowerShell se llama a las herramientas directamente, porque `--` no llega a `npm`):
+
+```bash
+cd backend
+npx jest --coverage                                                        # unitarias
+node --env-file=.env.test node_modules/jest/bin/jest.js --config jest.integration.config.js --runInBand --coverage   # integración (necesita Redis en el 6379)
+
+cd ../frontend
+npx ng test --no-watch --coverage                                          # requiere @vitest/coverage-v8
+```
+
 ### Integración continua
 
 GitHub Actions (`.github/workflows/ci.yml`) ejecuta en cada push: compilación y pruebas unitarias del backend, migraciones y pruebas de integración con servicios PostgreSQL y Redis, pruebas y build de producción del frontend, y construcción de las imágenes Docker.
@@ -280,7 +302,7 @@ GitHub Actions (`.github/workflows/ci.yml`) ejecuta en cada push: compilación y
 
 | Versión | Contenido |
 |---|---|
-| `v1.2.0` | Imagen del backend de 1,15 GB a 689 MB; frontend sin root; compose de producción con límites, reinicio y logs rotados; pruebas de resistencia y caos; respuestas 503 ante saturación o caída; timeout del limitador; `trust proxy` de un salto |
+| `v1.2.0` | Imagen del backend de 1,15 GB a 689 MB; frontend sin root; compose de producción con límites, reinicio y logs rotados; pruebas de resistencia y caos; respuestas 503 ante saturación o caída; timeout del limitador; `trust proxy` de un salto; cobertura medida |
 | `v1.1.0` | Migración del frontend a Angular Material (tabla, paginador y notificaciones; menú desplegable; carga diferida de rutas) |
 | `v1.0.0` | CI, rate limiting con Redis, documentación OpenAPI y cierre del MVP |
 | `v0.2.0` a `v0.5.0` | Login con Google, eventos y usuarios, reservas con cluster, reportes asíncronos |
