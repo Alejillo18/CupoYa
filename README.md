@@ -263,7 +263,7 @@ Para las de integración, crear la base de pruebas, migrarla y definir `TEST_DAT
 docker compose exec db psql -U cupoya -d cupoya -c "CREATE DATABASE cupoya_test;"
 ```
 
-Estado actual: backend 244 unitarias y 52 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis); frontend 210. Total: 439.
+Estado actual: backend 244 unitarias y 52 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis); frontend 210. Total: 506.
 
 ### Integración continua
 
