@@ -30,8 +30,11 @@ export interface AppDependencies {
 export function createApp(deps: AppDependencies = {}): Application {
   const app = express();
 
-  // Detrás de nginx: la IP real viene en X-Forwarded-For.
-  app.set('trust proxy', true);
+  // Detrás de nginx (un solo salto): la IP real es la última entrada de
+  // X-Forwarded-For, la que agrega nginx. Con `true` se tomaría la primera,
+  // que escribe el cliente, y se podría esquivar el limitador de tasa.
+  // Si se agrega otro proxy o balanceador delante de nginx, subir este número.
+  app.set('trust proxy', 1);
 
   app.use(express.json());
   app.use(cookieParser());
