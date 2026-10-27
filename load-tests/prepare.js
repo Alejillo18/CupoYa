@@ -24,7 +24,29 @@ async function main() {
     select: { id: true },
   });
   const ids = viejos.map((u) => u.id);
-  await prisma.reservation.deleteMany({ where: { userId: { in: ids } } });
+
+  // Si los usuarios de carga reservaron en otros eventos, borrar esas reservas
+  // sin devolver los lugares dejaria esos eventos con cupo "fantasma".
+  // El evento 'Carga' no hace falta: se borra y se recrea entero mas abajo.
+  const ajenas = await prisma.reservation.groupBy({
+    by: ['eventId'],
+    where: {
+      userId: { in: ids },
+      status: 'CONFIRMADA',
+      event: { name: { not: 'Carga' } },
+    },
+    _sum: { quantity: true },
+  });
+  await prisma.$transaction([
+    ...ajenas.map((g) =>
+      prisma.event.update({
+        where: { id: g.eventId },
+        data: { availableCapacity: { increment: g._sum.quantity ?? 0 } },
+      }),
+    ),
+    prisma.reservation.deleteMany({ where: { userId: { in: ids } } }),
+  ]);
+
   await prisma.refreshToken.deleteMany({ where: { userId: { in: ids } } });
   await prisma.reservation.deleteMany({ where: { event: { name: 'Carga' } } });
   await prisma.event.deleteMany({ where: { name: 'Carga' } });
