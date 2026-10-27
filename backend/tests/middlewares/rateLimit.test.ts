@@ -3,10 +3,10 @@ import request from 'supertest';
 import { errorHandler } from '../../src/middlewares/errorHandler';
 import { MemoryRateLimiter, rateLimit } from '../../src/middlewares/rateLimit';
 
-function buildApp(limiter: { hit: (k: string) => Promise<any> }) {
+function buildApp(limiter: { hit: (k: string) => Promise<any> }, timeoutMs?: number) {
   const app = express();
   app.set('trust proxy', true);
-  app.post('/auth', rateLimit(limiter, 'auth'), (_req, res) => {
+  app.post('/auth', rateLimit(limiter, 'auth', timeoutMs), (_req, res) => {
     res.json({ ok: true });
   });
   app.use(errorHandler);
@@ -80,5 +80,31 @@ describe('rateLimit (middleware)', () => {
     const res = await request(app).post('/auth');
 
     expect(res.status).toBe(200);
+  });
+
+  it('si el limitador no responde (Redis congelado), falla abierto dentro del timeout', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const colgado = { hit: () => new Promise<never>(() => undefined) };
+    const app = buildApp(colgado, 50);
+    const inicio = Date.now();
+
+    const res = await request(app).post('/auth');
+
+    expect(res.status).toBe(200);
+    expect(Date.now() - inicio).toBeLessThan(1000);
+  });
+
+  it('un limitador lento pero dentro del timeout sigue aplicando el límite', async () => {
+    const lento = {
+      hit: () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ permitido: false, restante: 0, reiniciaEnSeg: 30 }), 10),
+        ),
+    };
+    const app = buildApp(lento, 500);
+
+    const res = await request(app).post('/auth');
+
+    expect(res.status).toBe(429);
   });
 });

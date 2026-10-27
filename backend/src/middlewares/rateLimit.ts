@@ -11,7 +11,6 @@ export interface RateLimiter {
   hit(clave: string): Promise<RateResult>;
 }
 
-// Ventana fija en memoria: sirve para pruebas y para un solo proceso.
 export class MemoryRateLimiter implements RateLimiter {
   private readonly ventanas = new Map<string, { inicio: number; cuenta: number }>();
 
@@ -38,10 +37,28 @@ export class MemoryRateLimiter implements RateLimiter {
   }
 }
 
-export function rateLimit(limiter: RateLimiter, grupo: string) {
+const TIMEOUT_LIMITADOR_MS = 1000;
+
+function conTimeout<T>(promesa: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`el limitador no respondio en ${ms} ms`)), ms);
+    promesa.then(
+      (valor) => {
+        clearTimeout(timer);
+        resolve(valor);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+export function rateLimit(limiter: RateLimiter, grupo: string, timeoutMs: number = TIMEOUT_LIMITADOR_MS) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const r = await limiter.hit(`${grupo}:${req.ip}`);
+      const r = await conTimeout(limiter.hit(`${grupo}:${req.ip}`), timeoutMs);
       if (!r.permitido) {
         res.setHeader('Retry-After', String(r.reiniciaEnSeg));
         return next(
@@ -49,7 +66,7 @@ export function rateLimit(limiter: RateLimiter, grupo: string) {
         );
       }
     } catch (err) {
-      // Falla abierto: si el limitador no responde, no se tumba el servicio.
+
       console.error('Rate limiter no disponible:', err);
     }
     next();
