@@ -12,3 +12,7 @@ coverage/
 load-tests/data.jsonload-tests/data.json
 load-tests/caos-sonda.csv
 load-tests/k6-caos.txt
+
+load-tests/data.json
+load-tests/caos-sonda.csv
+load-tests/k6-caos.txt
