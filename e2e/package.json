@@ -1,0 +1,21 @@
+{
+  "name": "cupoya-e2e",
+  "private": true,
+  "description": "Pruebas de punta a punta (API + interfaz) de CupoYa con Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test --project=api",
+    "test:ui": "playwright test --project=ui",
+    "test:headed": "playwright test --project=ui --headed",
+    "test:debug": "playwright test --project=ui --debug",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.13.0",
+    "typescript": "^5.6.0"
+  }
+}
