@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { MatFormField } from '@angular/material/form-field';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -138,5 +140,36 @@ describe('LoginComponent', () => {
     const fixture = crear();
 
     expect(fixture.nativeElement.textContent).not.toContain('Cuenta creada');
+  });
+
+  it('permite ver la contraseña con un botón de ojo', () => {
+    const fixture = crear();
+    const raiz = fixture.nativeElement as HTMLElement;
+    const entrada = () => raiz.querySelector('app-password-field input') as HTMLInputElement;
+
+    expect(entrada().type).toBe('password');
+    (raiz.querySelector('button[aria-label="Mostrar contraseña"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(entrada().type).toBe('text');
+  });
+
+  it('el campo de contraseña mantiene el autocomplete que usan los gestores de contraseñas', () => {
+    const fixture = crear();
+    const entrada = (fixture.nativeElement as HTMLElement).querySelector(
+      'app-password-field input',
+    ) as HTMLInputElement;
+
+    expect(entrada.getAttribute('autocomplete')).toBe('current-password');
+  });
+
+  it('los mensajes de error ocupan su lugar y no pisan los campos', () => {
+    const fixture = crear();
+    const campos = fixture.debugElement.queryAll(By.directive(MatFormField));
+
+    expect(campos).toHaveLength(2);
+    for (const campo of campos) {
+      expect((campo.componentInstance as MatFormField).subscriptSizing).toBe('dynamic');
+    }
   });
 });
