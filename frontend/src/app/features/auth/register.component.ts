@@ -1,4 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
   FormBuilder,
@@ -16,6 +17,7 @@ import { AuthService } from '../../core/auth.service';
 import { mensajeGlobal } from '../../core/error.interceptor';
 import { NotificationService } from '../../core/notification.service';
 import { GoogleButtonComponent } from './google-button.component';
+import { PasswordFieldComponent } from './password-field.component';
 
 function coinciden(group: AbstractControl): ValidationErrors | null {
   const password = group.get('password')?.value;
@@ -33,6 +35,7 @@ function coinciden(group: AbstractControl): ValidationErrors | null {
     MatInputModule,
     MatButtonModule,
     GoogleButtonComponent,
+    PasswordFieldComponent,
   ],
   templateUrl: './register.component.html',
   styleUrl: './auth-form.css',
@@ -68,6 +71,20 @@ export class RegisterComponent {
     isErrorState: (control) =>
       !!control && control.touched && (control.invalid || this.form.hasError('noCoinciden')),
   };
+
+  private readonly valorPassword = toSignal(this.form.controls.password.valueChanges, {
+    initialValue: '',
+  });
+
+  // Lista que se tilda mientras se escribe. Son las mismas reglas del validador de arriba.
+  readonly requisitos = computed(() => {
+    const valor = this.valorPassword();
+    return [
+      { texto: 'Al menos 8 caracteres', cumple: valor.length >= 8 },
+      { texto: 'Una letra', cumple: /[A-Za-z]/.test(valor) },
+      { texto: 'Un número', cumple: /[0-9]/.test(valor) },
+    ];
+  });
 
   submit(): void {
     if (this.form.invalid || this.loading()) {
