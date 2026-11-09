@@ -1,6 +1,8 @@
 <main class="pagina">
   <h1>Reporte de ocupación</h1>
 
+  <app-occupancy-live />
+
   <button mat-flat-button type="button" (click)="solicitar()" [disabled]="generando()">
     {{ generando() ? 'Generando…' : 'Solicitar reporte' }}
   </button>

@@ -6,12 +6,13 @@ import { MatTableModule } from '@angular/material/table';
 import { mensajeGlobal } from '../../core/error.interceptor';
 import { NotificationService } from '../../core/notification.service';
 import { Report, ReportsService } from '../../core/reports.service';
+import { OccupancyLiveComponent } from './occupancy-live.component';
 
 const SONDEO_MS = 2000;
 
 @Component({
   selector: 'app-reports',
-  imports: [DatePipe, MatTableModule, MatButtonModule, MatProgressBarModule],
+  imports: [DatePipe, MatTableModule, MatButtonModule, MatProgressBarModule, OccupancyLiveComponent],
   templateUrl: './reports.component.html',
   styleUrl: '../../shared/pagina.css',
 })
