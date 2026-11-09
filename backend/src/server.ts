@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import Redis from 'ioredis';
+import Redis, { RedisOptions } from 'ioredis';
 import { createApp } from './app';
 import { RedisRateLimiter } from './middlewares/redisRateLimiter';
 import { PrismaUserRepository } from './modules/auth/auth.repository';
@@ -51,7 +51,7 @@ if (tiempoRealActivo) {
   notifier = { eventChanged: (id) => hub.markChanged(id) };
   const redisUrl = process.env.REDIS_URL;
   if (redisUrl) {
-    const conectar = (nombre: string, opciones: ConstructorParameters<typeof Redis>[1] = {}) => {
+    const conectar = (nombre: string, opciones: RedisOptions = {}) => {
       const redis = new Redis(redisUrl, opciones);
       redis.on('error', (e) => console.error(`Redis (${nombre}):`, e.message));
       return redis;
