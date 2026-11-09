@@ -1,8 +1,11 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
+import { EventsService } from '../../core/events.service';
 import { NotificationService } from '../../core/notification.service';
+import { OccupancyService } from '../../core/occupancy.service';
 import { ReportsService } from '../../core/reports.service';
 import { ReportsComponent } from './reports.component';
 
@@ -73,6 +76,21 @@ describe('ReportsComponent', () => {
         provideRouter([]),
         { provide: ReportsService, useValue: reports },
         { provide: NotificationService, useValue: notif },
+        // El gráfico en vivo es un componente hijo: se prueba aparte, acá va con servicios falsos.
+        {
+          provide: EventsService,
+          useValue: { list: () => of({ items: [], total: 0, page: 1, pageSize: 50 }) },
+        },
+        {
+          provide: OccupancyService,
+          useValue: {
+            estado: signal('desconectado').asReadonly(),
+            eventos: signal({}).asReadonly(),
+            error: signal(null).asReadonly(),
+            seguir: vi.fn(),
+            detener: vi.fn(),
+          },
+        },
       ],
     });
   });
@@ -83,6 +101,13 @@ describe('ReportsComponent', () => {
     const f = crear();
 
     expect(f.nativeElement.textContent).toContain('Solicitar reporte');
+    expect(f.componentInstance.reporte()).toBeNull();
+  });
+
+  it('muestra la ocupación en vivo sin necesidad de solicitar el reporte', () => {
+    const f = crear();
+
+    expect(f.nativeElement.querySelector('app-occupancy-live')).not.toBeNull();
     expect(f.componentInstance.reporte()).toBeNull();
   });
 
