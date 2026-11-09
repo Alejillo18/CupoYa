@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { MatFormField } from '@angular/material/form-field';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -6,27 +8,29 @@ import { EventsService } from '../../core/events.service';
 import { NotificationService } from '../../core/notification.service';
 import { EventFormComponent } from './event-form.component';
 
-const futuro = () => {
-  const d = new Date(Date.now() + 7 * 86_400_000);
-  d.setSeconds(0, 0);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// Un momento a "n" días de hoy, a la hora indicada.
+const enDias = (n: number, hora = 21, minutos = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  d.setHours(hora, minutos, 0, 0);
+  return d;
 };
 
 const valido = () => ({
   name: 'Recital',
   description: 'Show',
   venue: 'Estadio',
-  startsAt: futuro(),
+  fecha: enDias(7),
+  hora: enDias(7),
   totalCapacity: 100,
 });
 
-const eventoExistente = (disponible = 50) => ({
+const eventoExistente = (disponible = 50, startsAt = enDias(5, 20, 30)) => ({
   id: 'e1',
   name: 'Viejo',
   description: '',
   venue: 'Teatro',
-  startsAt: new Date(Date.now() + 5 * 86_400_000),
+  startsAt,
   totalCapacity: 50,
   availableCapacity: disponible,
   status: 'ACTIVO',
@@ -92,9 +96,34 @@ describe('EventFormComponent', () => {
 
   it('rechaza una fecha pasada', () => {
     const f = crear();
-    f.componentInstance.form.setValue({ ...valido(), startsAt: '2020-01-01T10:00' });
+    f.componentInstance.form.setValue({ ...valido(), fecha: enDias(-1), hora: enDias(-1) });
 
-    expect(f.componentInstance.form.controls.startsAt.invalid).toBe(true);
+    expect(f.componentInstance.form.hasError('fechaPasada')).toBe(true);
+  });
+
+  it('rechaza hoy con una hora que ya pasó', () => {
+    const f = crear();
+    const haceUnMinuto = new Date(Date.now() - 60_000);
+    f.componentInstance.form.setValue({ ...valido(), fecha: haceUnMinuto, hora: haceUnMinuto });
+
+    expect(f.componentInstance.form.hasError('fechaPasada')).toBe(true);
+  });
+
+  it('acepta hoy con una hora que todavía no llegó', () => {
+    const f = crear();
+    const enDosHoras = new Date(Date.now() + 2 * 3_600_000);
+    f.componentInstance.form.setValue({ ...valido(), fecha: enDosHoras, hora: enDosHoras });
+
+    expect(f.componentInstance.form.hasError('fechaPasada')).toBe(false);
+    expect(f.componentInstance.form.valid).toBe(true);
+  });
+
+  it('la fecha y la hora son obligatorias', () => {
+    const f = crear();
+    f.componentInstance.form.setValue({ ...valido(), fecha: null, hora: null });
+
+    expect(f.componentInstance.form.controls.fecha.hasError('required')).toBe(true);
+    expect(f.componentInstance.form.controls.hora.hasError('required')).toBe(true);
   });
 
   it('en modo alta crea el evento, avisa y vuelve al listado', () => {
@@ -112,6 +141,22 @@ describe('EventFormComponent', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/eventos');
   });
 
+  it('combina el día elegido y la hora elegida en un solo inicio', () => {
+    events.create.mockReturnValue(of({}));
+    const f = crear();
+    const dia = enDias(10, 0, 0);
+    f.componentInstance.form.setValue({
+      ...valido(),
+      fecha: dia,
+      hora: new Date(2000, 0, 1, 21, 30),
+    });
+
+    f.componentInstance.submit();
+
+    const esperado = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), 21, 30, 0, 0);
+    expect(events.create.mock.calls[0][0].startsAt.getTime()).toBe(esperado.getTime());
+  });
+
   it('en modo edición carga el evento, actualiza y avisa', () => {
     events.get.mockReturnValue(of(eventoExistente()));
     events.update.mockReturnValue(of({}));
@@ -124,6 +169,16 @@ describe('EventFormComponent', () => {
     expect(events.update).toHaveBeenCalledWith('e1', expect.objectContaining({ name: 'Nuevo' }));
     expect(notif.success).toHaveBeenCalledWith(expect.stringContaining('Evento actualizado'));
     expect(router.navigateByUrl).toHaveBeenCalledWith('/eventos');
+  });
+
+  it('en modo edición separa el inicio del evento en fecha y hora', () => {
+    const inicio = enDias(5, 20, 30);
+    events.get.mockReturnValue(of(eventoExistente(50, inicio)));
+    const f = crear('e1');
+
+    const { fecha, hora } = f.componentInstance.form.getRawValue();
+    expect(fecha!.toDateString()).toBe(inicio.toDateString());
+    expect([hora!.getHours(), hora!.getMinutes()]).toEqual([20, 30]);
   });
 
   it('si el evento a editar no existe notifica el motivo', () => {
@@ -184,4 +239,75 @@ describe('EventFormComponent', () => {
       expect(f.componentInstance.loading()).toBe(false);
     },
   );
+
+  describe('elección de fecha y hora', () => {
+    it('ofrece un calendario para elegir la fecha y una lista para elegir la hora', () => {
+      const f = crear();
+      const raiz = f.nativeElement as HTMLElement;
+
+      expect(raiz.querySelector('mat-datepicker-toggle')).not.toBeNull();
+      expect(raiz.querySelector('mat-timepicker-toggle')).not.toBeNull();
+    });
+
+    it('no deja elegir días anteriores a hoy', () => {
+      const f = crear();
+      const inicioDeHoy = new Date();
+      inicioDeHoy.setHours(0, 0, 0, 0);
+
+      expect(f.componentInstance.hoy.getTime()).toBe(inicioDeHoy.getTime());
+    });
+
+    it('aclara el formato de la fecha y de la hora, y qué zona horaria se usa', () => {
+      const f = crear();
+      const texto = (f.nativeElement as HTMLElement).textContent!;
+
+      expect(texto).toContain('dd/mm/aaaa');
+      expect(texto).toContain('HH:mm');
+      expect(texto).toContain('Hora de tu dispositivo');
+    });
+
+    it('si falta la fecha lo dice con claridad', () => {
+      const f = crear();
+      f.componentInstance.form.setValue({ ...valido(), fecha: null });
+
+      f.componentInstance.submit();
+      f.detectChanges();
+      f.detectChanges();
+
+      expect(f.nativeElement.textContent).toContain('Elegí la fecha del evento');
+    });
+
+    it('si falta la hora lo dice con claridad', () => {
+      const f = crear();
+      f.componentInstance.form.setValue({ ...valido(), hora: null });
+
+      f.componentInstance.submit();
+      f.detectChanges();
+      f.detectChanges();
+
+      expect(f.nativeElement.textContent).toContain('Elegí la hora de inicio');
+    });
+
+    it('si el inicio ya pasó explica que tiene que ser en el futuro', () => {
+      const f = crear();
+      const haceUnMinuto = new Date(Date.now() - 60_000);
+      f.componentInstance.form.setValue({ ...valido(), fecha: haceUnMinuto, hora: haceUnMinuto });
+
+      f.componentInstance.submit();
+      f.detectChanges();
+      f.detectChanges();
+
+      expect(f.nativeElement.textContent).toContain('El evento tiene que empezar en el futuro');
+    });
+
+    it('los mensajes de error ocupan su lugar y no pisan los campos', () => {
+      const f = crear();
+      const campos = f.debugElement.queryAll(By.directive(MatFormField));
+
+      expect(campos).toHaveLength(6);
+      for (const campo of campos) {
+        expect((campo.componentInstance as MatFormField).subscriptSizing).toBe('dynamic');
+      }
+    });
+  });
 });
