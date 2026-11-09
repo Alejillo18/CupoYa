@@ -1,0 +1,25 @@
+.formulario {
+    gap: 1.25rem;
+  }
+  
+  .fecha-hora {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+  
+  .fecha-hora mat-form-field {
+    width: 100%;
+  }
+  
+  .acciones {
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+  }
+  
+  @media (max-width: 480px) {
+    .fecha-hora {
+      grid-template-columns: 1fr;
+    }
+  }

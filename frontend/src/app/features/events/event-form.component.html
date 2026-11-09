@@ -4,31 +4,75 @@
       <h1>{{ id() ? 'Editar evento' : 'Nuevo evento' }}</h1>
 
       <form class="formulario" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Nombre</mat-label>
           <input matInput type="text" formControlName="name" />
           <mat-error>El nombre es obligatorio (máximo 120 caracteres).</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Descripción</mat-label>
           <textarea matInput formControlName="description" rows="3"></textarea>
           <mat-error>La descripción admite hasta 2000 caracteres.</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Lugar</mat-label>
           <input matInput type="text" formControlName="venue" />
           <mat-error>El lugar es obligatorio (máximo 160 caracteres).</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Fecha y hora</mat-label>
-          <input matInput type="datetime-local" formControlName="startsAt" />
-          <mat-error>Ingresá una fecha y hora futuras.</mat-error>
-        </mat-form-field>
+        <div class="fecha-hora">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Fecha</mat-label>
+            <input
+              matInput
+              [matDatepicker]="selectorFecha"
+              [min]="hoy"
+              formControlName="fecha"
+              placeholder="dd/mm/aaaa"
+              autocomplete="off"
+            />
+            <mat-datepicker-toggle matIconSuffix [for]="selectorFecha" />
+            <mat-datepicker #selectorFecha />
+            <mat-hint>Formato dd/mm/aaaa</mat-hint>
+            <mat-error>
+              @if (form.controls.fecha.hasError('required')) {
+                Elegí la fecha del evento.
+              } @else if (form.controls.fecha.hasError('matDatepickerParse')) {
+                La fecha no es válida. Usá el formato dd/mm/aaaa.
+              } @else if (form.controls.fecha.hasError('matDatepickerMin')) {
+                La fecha no puede ser anterior a hoy.
+              }
+            </mat-error>
+          </mat-form-field>
 
-        <mat-form-field appearance="outline">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Hora de inicio</mat-label>
+            <input
+              matInput
+              [matTimepicker]="selectorHora"
+              [errorStateMatcher]="matcherHora"
+              formControlName="hora"
+              placeholder="HH:mm"
+              autocomplete="off"
+            />
+            <mat-timepicker-toggle matIconSuffix [for]="selectorHora" aria-label="Elegir hora" />
+            <mat-timepicker #selectorHora interval="30m" />
+            <mat-hint>24 h (HH:mm). Hora de tu dispositivo ({{ zonaHoraria }}).</mat-hint>
+            <mat-error>
+              @if (form.controls.hora.hasError('required')) {
+                Elegí la hora de inicio.
+              } @else if (form.controls.hora.hasError('matTimepickerParse')) {
+                La hora no es válida. Usá el formato HH:mm, por ejemplo 21:00.
+              } @else if (form.hasError('fechaPasada')) {
+                El evento tiene que empezar en el futuro.
+              }
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Cupo total</mat-label>
           <input matInput type="number" formControlName="totalCapacity" min="1" step="1" />
           <mat-error>El cupo debe ser un entero mayor a cero.</mat-error>

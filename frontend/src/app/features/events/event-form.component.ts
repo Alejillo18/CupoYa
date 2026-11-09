@@ -8,22 +8,35 @@ import {
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { ErrorStateMatcher } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatTimepickerModule } from '@angular/material/timepicker';
 import { Router, RouterLink } from '@angular/router';
 import { mensajeGlobal } from '../../core/error.interceptor';
 import { EventsService } from '../../core/events.service';
+import { proveedoresFechas } from '../../core/fechas-es';
 import { NotificationService } from '../../core/notification.service';
 
-function fechaFutura(control: AbstractControl): ValidationErrors | null {
-  const v = control.value as string;
-  if (!v) return null;
-  return new Date(v).getTime() > Date.now() ? null : { fechaPasada: true };
+// Une el día elegido en el calendario con la hora elegida en la lista.
+function combinar(fecha: Date, hora: Date): Date {
+  return new Date(
+    fecha.getFullYear(),
+    fecha.getMonth(),
+    fecha.getDate(),
+    hora.getHours(),
+    hora.getMinutes(),
+    0,
+    0,
+  );
 }
 
-function aInputLocal(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function inicioFuturo(grupo: AbstractControl): ValidationErrors | null {
+  const fecha = grupo.get('fecha')?.value as Date | null;
+  const hora = grupo.get('hora')?.value as Date | null;
+  if (!fecha || !hora) return null;
+  return combinar(fecha, hora).getTime() > Date.now() ? null : { fechaPasada: true };
 }
 
 const MENSAJES: Record<string, string> = {
@@ -44,9 +57,12 @@ const MENSAJES: Record<string, string> = {
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
+    MatDatepickerModule,
+    MatTimepickerModule,
   ],
+  providers: [...proveedoresFechas],
   templateUrl: './event-form.component.html',
-  styleUrl: '../../shared/pagina.css',
+  styleUrls: ['../../shared/pagina.css', './event-form.component.css'],
 })
 export class EventFormComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
@@ -59,16 +75,35 @@ export class EventFormComponent implements OnInit {
 
   readonly loading = signal(false);
 
-  readonly form = this.fb.nonNullable.group({
-    name: ['', [Validators.required, Validators.maxLength(120)]],
-    description: ['', [Validators.maxLength(2000)]],
-    venue: ['', [Validators.required, Validators.maxLength(160)]],
-    startsAt: ['', [Validators.required, fechaFutura]],
-    totalCapacity: [
-      1,
-      [Validators.required, Validators.min(1), Validators.pattern(/^\d+$/)],
-    ],
-  });
+  // Primer día que se puede elegir en el calendario.
+  readonly hoy = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  })();
+
+  readonly zonaHoraria = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  readonly form = this.fb.nonNullable.group(
+    {
+      name: ['', [Validators.required, Validators.maxLength(120)]],
+      description: ['', [Validators.maxLength(2000)]],
+      venue: ['', [Validators.required, Validators.maxLength(160)]],
+      fecha: this.fb.control<Date | null>(null, [Validators.required]),
+      hora: this.fb.control<Date | null>(null, [Validators.required]),
+      totalCapacity: [
+        1,
+        [Validators.required, Validators.min(1), Validators.pattern(/^\d+$/)],
+      ],
+    },
+    { validators: inicioFuturo },
+  );
+
+  // "Ya pasó" es un error del grupo (fecha + hora juntas); este matcher lo muestra en el campo Hora.
+  readonly matcherHora: ErrorStateMatcher = {
+    isErrorState: (control) =>
+      !!control && control.touched && (control.invalid || this.form.hasError('fechaPasada')),
+  };
 
   ngOnInit(): void {
     const id = this.id();
@@ -79,7 +114,8 @@ export class EventFormComponent implements OnInit {
           name: e.name,
           description: e.description,
           venue: e.venue,
-          startsAt: aInputLocal(e.startsAt),
+          fecha: e.startsAt,
+          hora: e.startsAt,
           totalCapacity: e.totalCapacity,
         }),
       error: (err) => this.avisarError(err),
@@ -92,13 +128,15 @@ export class EventFormComponent implements OnInit {
       return;
     }
 
-    this.loading.set(true);
     const v = this.form.getRawValue();
+    if (!v.fecha || !v.hora) return;
+
+    this.loading.set(true);
     const datos = {
       name: v.name.trim(),
       description: v.description.trim(),
       venue: v.venue.trim(),
-      startsAt: new Date(v.startsAt),
+      startsAt: combinar(v.fecha, v.hora),
       totalCapacity: Number(v.totalCapacity),
     };
 
