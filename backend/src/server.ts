@@ -10,6 +10,11 @@ import { RefreshTokenService } from './modules/auth/refreshToken.service';
 import { TokenService } from './modules/auth/token.service';
 import { PrismaEventRepository } from './modules/events/events.repository';
 import { EventsService } from './modules/events/events.service';
+import { OccupancyHub } from './modules/realtime/occupancy.hub';
+import { prismaOccupancyLoader } from './modules/realtime/occupancy.loader';
+import { OccupancyNotifier, sinNotificacion } from './modules/realtime/occupancy.notifier';
+import { attachRealtime } from './modules/realtime/realtime.server';
+import { RedisOccupancyBridge } from './modules/realtime/redis.occupancy.bridge';
 import { ReportPool } from './modules/reports/report.pool';
 import { PrismaReportsRepository } from './modules/reports/reports.repository';
 import { ReportsService } from './modules/reports/reports.service';
@@ -37,6 +42,36 @@ if (!google) {
   console.warn('GOOGLE_CLIENT_ID no definido: el ingreso con Google está deshabilitado.');
 }
 
+// Tiempo real: ocupación de eventos por WebSocket. Con Redis, los avisos se reparten
+// entre todos los workers; sin Redis, solo funcionan dentro del mismo proceso.
+const tiempoRealActivo = process.env.REALTIME_ENABLED !== 'false';
+const hub = new OccupancyHub(prismaOccupancyLoader(prisma));
+let notifier: OccupancyNotifier = sinNotificacion;
+if (tiempoRealActivo) {
+  notifier = { eventChanged: (id) => hub.markChanged(id) };
+  const redisUrl = process.env.REDIS_URL;
+  if (redisUrl) {
+    const conectar = (nombre: string, opciones: ConstructorParameters<typeof Redis>[1] = {}) => {
+      const redis = new Redis(redisUrl, opciones);
+      redis.on('error', (e) => console.error(`Redis (${nombre}):`, e.message));
+      return redis;
+    };
+    // El publicador no encola comandos si Redis está caído: falla enseguida y no acumula memoria.
+    const publicador = conectar('tiempo real, publicación', {
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+    });
+    const suscriptor = conectar('tiempo real, suscripción');
+    const puente = new RedisOccupancyBridge(hub, publicador, suscriptor);
+    void puente.start();
+    notifier = puente;
+  } else {
+    console.warn('REDIS_URL no definido: el tiempo real solo funciona dentro de cada proceso.');
+  }
+} else {
+  console.warn('Tiempo real deshabilitado.');
+}
+
 const authService = new AuthService(
   new PrismaUserRepository(prisma),
   tokens,
@@ -44,9 +79,12 @@ const authService = new AuthService(
   undefined,
   google,
 );
-const eventsService = new EventsService(new PrismaEventRepository(prisma));
+const eventsService = new EventsService(new PrismaEventRepository(prisma), undefined, notifier);
 const usersService = new UsersService(new PrismaUsersRepository(prisma));
-const reservationsService = new ReservationsService(new PrismaReservationsRepository(prisma));
+const reservationsService = new ReservationsService(
+  new PrismaReservationsRepository(prisma),
+  notifier,
+);
 const reportsService = new ReportsService(
   new PrismaReportsRepository(prisma),
   new ReportPool(),
@@ -63,7 +101,7 @@ if (process.env.RATE_LIMIT_ENABLED !== 'false' && process.env.REDIS_URL) {
   console.warn('Rate limiting deshabilitado.');
 }
 
-createApp({
+const server = createApp({
   authService,
   eventsService,
   usersService,
@@ -75,3 +113,7 @@ createApp({
 }).listen(port, () => {
   console.log(`CupoYa backend escuchando en el puerto ${port}`);
 });
+
+if (tiempoRealActivo) {
+  attachRealtime(server, { tokens, hub });
+}
