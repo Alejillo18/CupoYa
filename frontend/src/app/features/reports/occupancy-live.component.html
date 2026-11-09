@@ -1,0 +1,49 @@
+<section class="ocupacion" aria-labelledby="ocupacion-titulo">
+  <header class="ocupacion__cabecera">
+    <h2 id="ocupacion-titulo">Ocupación en vivo</h2>
+    <span class="estado" role="status" [attr.data-estado]="estadoClave()">{{ estado() }}</span>
+  </header>
+
+  @if (errorCarga()) {
+    <p class="aviso" role="alert">No se pudieron cargar los eventos.</p>
+  } @else if (!cargando()) {
+    @if (catalogo().length === 0) {
+      <p class="vacio">No hay eventos activos para mostrar.</p>
+    } @else {
+      <mat-form-field appearance="outline" class="selector">
+        <mat-label>Eventos a seguir (hasta {{ max }})</mat-label>
+        <mat-select multiple [value]="seleccion()" (selectionChange)="cambiar($event.value)">
+          @for (e of catalogo(); track e.id) {
+            <mat-option [value]="e.id" [disabled]="deshabilitada(e.id)">
+              {{ e.name }} · {{ e.startsAt | date: 'dd/MM HH:mm' }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      @if (mensajeError(); as mensaje) {
+        <p class="aviso" role="alert">{{ mensaje }}</p>
+      }
+
+      @if (seleccion().length === 0) {
+        <p class="vacio">
+          No hay eventos próximos seleccionados. Elegí hasta {{ max }} para ver su ocupación.
+        </p>
+      }
+
+      <ul class="barras">
+        @for (f of filas(); track f.id) {
+          <li class="barra">
+            <div class="barra__titulo">
+              <span class="barra__nombre">{{ f.nombre }}</span>
+              <span class="barra__valor">{{ f.valor }}</span>
+            </div>
+            <div class="barra__pista" role="img" [attr.aria-label]="f.etiqueta">
+              <div class="barra__lleno" [class.alta]="f.alta" [style.width.%]="f.percent"></div>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>
