@@ -55,6 +55,40 @@ button[type='submit'] {
   color: #1b5e20;
 }
 
+.requisitos {
+  list-style: none;
+  margin: -0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--mat-sys-on-surface-variant, #5f6368);
+}
+
+.requisitos li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.requisitos .marca {
+  width: 1rem;
+  text-align: center;
+}
+
+.requisitos li.cumple {
+  color: #1b5e20;
+}
+
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .separador {
   display: flex;
   align-items: center;
