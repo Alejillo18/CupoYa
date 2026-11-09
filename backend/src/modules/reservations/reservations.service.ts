@@ -1,6 +1,11 @@
 import { AppError } from '../../errors/AppError';
 import { RoleName } from '../auth/token.service';
 import {
+  OccupancyNotifier,
+  avisarCambio,
+  sinNotificacion,
+} from '../realtime/occupancy.notifier';
+import {
   ReservationRecord,
   ReservationsRepository,
   ReserveFailure,
@@ -22,7 +27,10 @@ const ERRORES: Record<ReserveFailure, AppError> = {
 };
 
 export class ReservationsService {
-  constructor(private readonly reservations: ReservationsRepository) {}
+  constructor(
+    private readonly reservations: ReservationsRepository,
+    private readonly notifier: OccupancyNotifier = sinNotificacion,
+  ) {}
 
   async reserve(input: {
     userId: string;
@@ -39,6 +47,8 @@ export class ReservationsService {
       const e = ERRORES[result.reason];
       throw new AppError(e.status, e.code, e.message);
     }
+    // Una repetición idempotente no cambia la ocupación: no hay nada que avisar.
+    if (!result.replayed) avisarCambio(this.notifier, input.eventId);
     return { reservation: result.reservation, replayed: result.replayed };
   }
 
@@ -59,7 +69,10 @@ export class ReservationsService {
     }
 
     const result = await this.reservations.cancel(id);
-    if (result.ok) return result.reservation;
+    if (result.ok) {
+      avisarCambio(this.notifier, existing.eventId);
+      return result.reservation;
+    }
     if (result.reason === 'YA_CANCELADA') return existing;
     throw new AppError(404, 'RESERVA_NO_ENCONTRADA', 'La reserva no existe.');
   }

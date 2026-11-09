@@ -1,4 +1,9 @@
 import { AppError } from '../../errors/AppError';
+import {
+  OccupancyNotifier,
+  avisarCambio,
+  sinNotificacion,
+} from '../realtime/occupancy.notifier';
 import { EventChanges, EventRecord, EventRepository, NewEvent } from './events.repository';
 
 const MAX_PAGE_SIZE = 100;
@@ -14,6 +19,7 @@ export class EventsService {
   constructor(
     private readonly events: EventRepository,
     private readonly now: () => Date = () => new Date(),
+    private readonly notifier: OccupancyNotifier = sinNotificacion,
   ) {}
 
   async create(data: NewEvent): Promise<EventRecord> {
@@ -21,7 +27,9 @@ export class EventsService {
     if (!Number.isInteger(data.totalCapacity) || data.totalCapacity <= 0) {
       throw new AppError(400, 'CUPO_INVALIDO', 'El cupo debe ser un entero mayor a cero.');
     }
-    return this.events.create(data);
+    const created = await this.events.create(data);
+    avisarCambio(this.notifier, created.id);
+    return created;
   }
 
   async get(id: string): Promise<EventRecord> {
@@ -59,13 +67,13 @@ export class EventsService {
 
     const updated = await this.events.update(id, changes);
     if (!updated) {
-
       throw new AppError(
         409,
         'CUPO_MENOR_A_RESERVAS',
         'El cupo total no puede ser menor a los lugares ya reservados.',
       );
     }
+    avisarCambio(this.notifier, id);
     return updated;
   }
 
@@ -74,6 +82,7 @@ export class EventsService {
     if (!cancelled) {
       throw new AppError(404, 'EVENTO_NO_ENCONTRADO', 'El evento no existe.');
     }
+    avisarCambio(this.notifier, id);
   }
 
   private assertFutureDate(date: Date): void {
