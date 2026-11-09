@@ -1,9 +1,23 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { vi } from 'vitest';
 import { AuthService } from './auth.service';
 
 const API = '/api/v1/auth';
+
+// Storage falso: no depende del localStorage de jsdom ni del de Node (v22.4+),
+// y permite comprobar que nunca se escribe nada.
+function storageFalso() {
+  return {
+    length: 0,
+    getItem: vi.fn(() => null),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn(),
+    key: vi.fn(() => null),
+  };
+}
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -17,7 +31,10 @@ describe('AuthService', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.verify();
+    vi.unstubAllGlobals();
+  });
 
   it('arranca sin sesión', () => {
     expect(service.isAuthenticated()).toBe(false);
@@ -39,14 +56,20 @@ describe('AuthService', () => {
   });
 
   it('login no guarda nada en localStorage ni sessionStorage', () => {
+    const local = storageFalso();
+    const sesion = storageFalso();
+    vi.stubGlobal('localStorage', local);
+    vi.stubGlobal('sessionStorage', sesion);
+
     service.login('ana@mail.com', 'Clave1234').subscribe();
     http.expectOne(`${API}/login`).flush({
       user: { id: 'u1', email: 'ana@mail.com', role: 'USUARIO' },
       accessToken: 'tok1',
     });
 
-    expect(localStorage.length).toBe(0);
-    expect(sessionStorage.length).toBe(0);
+    expect(service.accessToken()).toBe('tok1');
+    expect(local.setItem).not.toHaveBeenCalled();
+    expect(sesion.setItem).not.toHaveBeenCalled();
   });
 
   it('un login fallido no deja sesión', () => {
@@ -129,6 +152,7 @@ describe('AuthService', () => {
     expect(terminado).toBe(true);
     expect(service.isAuthenticated()).toBe(false);
   });
+
   it('loginWithGoogle envía el idToken con credenciales y guarda la sesión', () => {
     service.loginWithGoogle('id-token-123').subscribe();
 
