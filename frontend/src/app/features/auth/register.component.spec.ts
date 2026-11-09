@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { MatFormField } from '@angular/material/form-field';
+import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -147,4 +149,89 @@ describe('RegisterComponent', () => {
       expect(f.componentInstance.loading()).toBe(false);
     },
   );
+
+  describe('contraseña: ojo y requisitos', () => {
+    const raiz = (f: { nativeElement: any }) => f.nativeElement as HTMLElement;
+    const requisitos = (f: { nativeElement: any }) =>
+      Array.from(raiz(f).querySelectorAll('.requisitos li'));
+    const cumplidos = (f: { nativeElement: any }) =>
+      requisitos(f).map((li) => li.classList.contains('cumple'));
+
+    it('al empezar ningún requisito está cumplido', () => {
+      const f = crear();
+
+      expect(requisitos(f)).toHaveLength(3);
+      expect(cumplidos(f)).toEqual([false, false, false]);
+    });
+
+    it('los requisitos se van cumpliendo mientras se escribe', () => {
+      const f = crear();
+
+      f.componentInstance.form.controls.password.setValue('Clave1234');
+      f.detectChanges();
+
+      expect(cumplidos(f)).toEqual([true, true, true]);
+    });
+
+    it('una contraseña larga pero sin números cumple longitud y letras, no el número', () => {
+      const f = crear();
+
+      f.componentInstance.form.controls.password.setValue('SoloLetras');
+      f.detectChanges();
+
+      expect(cumplidos(f)).toEqual([true, true, false]);
+    });
+
+    it('cada requisito dice si está cumplido, sin depender solo del color', () => {
+      const f = crear();
+      f.componentInstance.form.controls.password.setValue('abc');
+      f.detectChanges();
+
+      const [longitud, letra, numero] = requisitos(f).map((li) => li.textContent!);
+      expect(longitud).toContain('pendiente');
+      expect(letra).toContain('cumplido');
+      expect(numero).toContain('pendiente');
+    });
+
+    it('las dos contraseñas usan el campo con botón de ojo', () => {
+      const f = crear();
+
+      expect(raiz(f).querySelectorAll('app-password-field')).toHaveLength(2);
+      expect(raiz(f).querySelectorAll('button[aria-label="Mostrar contraseña"]')).toHaveLength(2);
+    });
+
+    it('ambas contraseñas piden autocomplete new-password para los gestores de contraseñas', () => {
+      const f = crear();
+      const entradas = Array.from(
+        raiz(f).querySelectorAll<HTMLInputElement>('app-password-field input'),
+      );
+
+      expect(entradas.map((e) => e.getAttribute('autocomplete'))).toEqual([
+        'new-password',
+        'new-password',
+      ]);
+    });
+
+    it('el ojo de una contraseña no muestra la otra', () => {
+      const f = crear();
+      const ojos = raiz(f).querySelectorAll<HTMLButtonElement>('button.ojo');
+      const entradas = () =>
+        Array.from(raiz(f).querySelectorAll<HTMLInputElement>('app-password-field input'));
+
+      ojos[0].click();
+      f.detectChanges();
+
+      expect(entradas().map((e) => e.type)).toEqual(['text', 'password']);
+    });
+
+    it('los mensajes de error ocupan su lugar y no pisan los campos', () => {
+      const f = crear();
+      const campos = f.debugElement.queryAll(By.directive(MatFormField));
+
+      expect(campos).toHaveLength(3);
+      for (const campo of campos) {
+        expect((campo.componentInstance as MatFormField).subscriptSizing).toBe('dynamic');
+      }
+    });
+  });
 });
