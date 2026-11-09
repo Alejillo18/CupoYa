@@ -18,11 +18,13 @@ Proyecto académico desarrollado con **Programación Extrema (XP)** y **TDD**.
 | 6 | CI, rate limiting con Redis, documentación OpenAPI y cierre | Completa (`v1.0.0`) |
 | 7 | Interfaz con Angular Material | Completa (`v1.1.0`) |
 | 8 | Contenedores de producción y pruebas de resistencia | Completa (`v1.2.0`) |
+| 9 | Ocupación en vivo por WebSocket e interfaz renovada | Completa (`v1.3.0`) |
 
 ## Stack
 
-- **Backend:** Node 22, Express, TypeScript, Prisma, PostgreSQL 16, Redis 7, `cluster` (multiproceso) y `worker_threads` (Piscina)
+- **Backend:** Node 22, Express, TypeScript, Prisma, PostgreSQL 16, Redis 7, `cluster` (multiproceso), `worker_threads` (Piscina) y WebSocket (`ws`)
 - **Frontend:** Angular 21 (componentes standalone, signals) con Angular Material (tema M3), servido por nginx sin privilegios
+- **Tiempo real:** WebSocket (`ws`) con difusión entre procesos por Redis pub/sub
 - **Autenticación:** JWT + refresh token rotativo, Google Identity Services
 - **Pruebas:** Jest + Supertest (backend), Vitest (frontend), integración contra PostgreSQL y Redis reales, k6 (carga y resistencia)
 - **Infraestructura:** Docker, Docker Compose (base y overlay de producción) y GitHub Actions
@@ -31,7 +33,7 @@ Proyecto académico desarrollado con **Programación Extrema (XP)** y **TDD**.
 
 ```
 cupoya/
-├─ backend/                 API REST (Express + TypeScript)
+├─ backend/                 API REST y WebSocket (Express + TypeScript)
 ├─ frontend/                Interfaz (Angular + nginx)
 ├─ load-tests/              Carga, resistencia y caos (k6, PowerShell) y verificación de consistencia
 ├─ .github/workflows/ci.yml
@@ -112,6 +114,7 @@ Especificación OpenAPI 3 en `/api/openapi.json` y Swagger UI en `/api/docs`.
 | POST | `/reservations/:id/cancel` | Dueño o Admin | Cancelar reserva (libera el cupo, idempotente) |
 | GET | `/users` | Admin | Listado paginado de usuarios |
 | PATCH | `/users/:id/role` | Admin | Cambiar rol (siempre queda al menos un Admin) |
+| WS | `/ws` | Admin | Ocupación de eventos en vivo (ver [Ocupación en vivo](#ocupación-en-vivo-websocket)) |
 | POST | `/reports` | Admin | Solicitar reporte de ocupación (202, se genera en segundo plano) |
 | GET | `/reports/:id` | Admin | Estado del reporte y, si está listo, el resultado |
 | GET | `/reports/:id/download` | Admin | Descargar el reporte en CSV (409 si no está listo) |
@@ -133,6 +136,32 @@ Ante una sobrecarga o una falla de infraestructura, la API y nginx responden con
 
 Los pedidos que fallan así no se aplicaron o se pueden repetir sin riesgo: las reservas llevan `Idempotency-Key` y la cancelación es idempotente.
 
+## Ocupación en vivo (WebSocket)
+
+La pantalla `/reportes` (solo `ADMIN`) muestra la ocupación de hasta 5 eventos que se actualiza sola, sin recargar. El navegador abre un WebSocket en `/api/v1/ws`; nginx reenvía el *upgrade* con timeouts de 1 hora, y el proxy de desarrollo de Angular tiene `"ws": true`.
+
+**Protocolo** (mensajes JSON, el tipo de cada uno identifica su función):
+
+| Mensaje | Sentido | Descripción |
+|---|---|---|
+| `auth` | cliente → servidor | Primer mensaje obligatorio: lleva el access token. El token no viaja en la URL |
+| `autenticado` | servidor → cliente | Confirma la sesión |
+| `suscribir` | cliente → servidor | Lista de eventos a seguir (máximo 5) |
+| `snapshot` | servidor → cliente | Estado actual de cada evento al suscribirse |
+| `ocupacion` | servidor → cliente | Cambios de ocupación, agrupados cada 500 ms |
+| `error` | servidor → cliente | Error de protocolo (por ejemplo, demasiados eventos) |
+
+Códigos de cierre: `4401` (token inválido o vencido: el frontend renueva la sesión una vez y reintenta) y `4403` (sin permiso: no es `ADMIN`). Ante una caída de la conexión, el frontend reconecta con espera exponencial y muestra el estado (*En vivo*, *Reconectando*, *Desconectado*).
+
+**Cómo escala:** cada worker del `cluster` mantiene su propio *hub* de conexiones. Cuando una reserva, una cancelación o la edición de un evento cambia la ocupación, el worker publica solo el **id del evento** en un canal de Redis; todos los workers reciben el aviso, leen el estado actual de la base y lo envían a sus clientes suscriptos. Así no se transmiten datos en el canal y un mensaje perdido se corrige con el siguiente. Si Redis falla, la reserva sigue funcionando (falla abierto) y solo se pierde la actualización en vivo. Se desactiva con `REALTIME_ENABLED=false`.
+
+Para observarla desde la terminal (usa el login de un admin; ver el encabezado del script):
+
+```bash
+cd backend
+WS_URL=ws://localhost:8080/api/v1/ws node --env-file=.env scripts/ws-ocupacion.js <id-del-evento>
+```
+
 ## Concurrencia y paralelismo
 
 - **Sin sobreventa:** la reserva es una transacción con un `UPDATE ... WHERE available_capacity >= qty` atómico; una restricción `CHECK` en la base actúa como segunda red.
@@ -140,6 +169,7 @@ Los pedidos que fallan así no se aplicaron o se pueden repetir sin riesgo: las 
 - **Idempotencia:** `(user_id, idempotency_key)` único; repetir un pedido con la misma clave devuelve la misma reserva.
 - **Multiproceso:** `cluster` con política de reinicio de workers; sin estado en memoria (tokens autocontenidos, datos en PostgreSQL y contadores en Redis). Cada worker usa un pool de 10 conexiones a la base (`connection_limit`).
 - **Multihilo:** los reportes de ocupación se calculan en un pool de `worker_threads` (Piscina, `REPORT_THREADS` hilos por proceso), fuera del *event loop* que atiende la API. El estado del reporte (`PENDIENTE`, `EN_PROCESO`, `LISTO`, `ERROR`) vive en la base, así que cualquier worker puede responder la consulta. Un reporte `EN_PROCESO` por más de 10 minutos se marca como `ERROR`.
+- **Tiempo real multiproceso:** las conexiones WebSocket viven en cada worker; Redis pub/sub los coordina enviando solo ids de evento (ver [Ocupación en vivo](#ocupación-en-vivo-websocket)).
 
 ## Pruebas de carga y resistencia
 
@@ -236,7 +266,7 @@ npx prisma migrate deploy
 npm run dev                      # un proceso; para multiproceso: npm run dev:cluster
 ```
 
-Variables de `backend/.env` (no se versiona): `DATABASE_URL` (puede incluir `?connection_limit=10`), `JWT_SECRET`, `JWT_ACCESS_TTL`, `REFRESH_TTL_DAYS`, `COOKIE_SECURE`, `GOOGLE_CLIENT_ID`, `WEB_CONCURRENCY`, `REPORT_THREADS`, `REDIS_URL`, `RATE_LIMIT_ENABLED`, `RATE_LIMIT_MAX`, `REPORT_SIMULATED_WORK_MS` (solo para pruebas de carga; en uso normal vale 0).
+Variables de `backend/.env` (no se versiona): `DATABASE_URL` (puede incluir `?connection_limit=10`), `JWT_SECRET`, `JWT_ACCESS_TTL`, `REFRESH_TTL_DAYS`, `COOKIE_SECURE`, `GOOGLE_CLIENT_ID`, `WEB_CONCURRENCY`, `REPORT_THREADS`, `REDIS_URL`, `REALTIME_ENABLED`, `RATE_LIMIT_ENABLED`, `RATE_LIMIT_MAX`, `REPORT_SIMULATED_WORK_MS` (solo para pruebas de carga; en uso normal vale 0).
 
 **Frontend**
 
@@ -260,18 +290,27 @@ npm test                  # Vitest
 Para las de integración, crear la base de pruebas, migrarla y definir `TEST_DATABASE_URL` (y opcionalmente `TEST_REDIS_URL`) en `backend/.env.test`:
 
 ```bash
+docker compose up -d db redis
 docker compose exec db psql -U cupoya -d cupoya -c "CREATE DATABASE cupoya_test;"
 ```
 
-Estado actual: backend 244 unitarias y 52 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis); frontend 210. Total: 506.
+```ini
+# backend/.env.test (no se versiona; la clave va codificada como URL y el valor entre comillas)
+TEST_DATABASE_URL="postgresql://cupoya:<CLAVE>@localhost:5433/cupoya_test"
+TEST_REDIS_URL="redis://localhost:6379"
+```
+
+> `node --env-file` **no pisa** las variables que ya existan en la terminal: si hay una `TEST_DATABASE_URL` exportada de antes, gana sobre el archivo. Ante un `Can't reach database server` inesperado, correr `unset TEST_DATABASE_URL TEST_REDIS_URL DATABASE_URL`.
+
+Estado actual: backend 290 unitarias y 53 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis, y el puente de ocupación por Redis pub/sub); frontend 294. Total: 637.
 
 ### Cobertura de pruebas
 
 | Suite | Sentencias | Ramas | Funciones | Líneas |
 |---|---|---|---|---|
-| Backend, unitarias (244) | 94,62 % | 91,95 % | 91,04 % | 94,49 % |
-| Backend, integración (52) | 95,86 % | 80,48 % | 91,11 % | 95,68 % |
-| Frontend (210) | 94,65 % | 94,39 % | 83,78 % | 96,06 % |
+| Backend, unitarias (290) | 94,86 % | 89,08 % | 92,00 % | 95,01 % |
+| Backend, integración (53) | 93,15 % | 80,00 % | 86,79 % | 93,52 % |
+| Frontend (294) | 94,11 % | 93,67 % | 85,66 % | 96,12 % |
 
 - Las de integración miden solo los archivos que ejercitan (repositorios, pool de reportes y limitador con Redis); se leen junto con las unitarias, no en su lugar.
 - En el frontend, la cobertura de funciones baja porque V8 cuenta como funciones los manejadores de eventos de las plantillas HTML. Los puntos bajos reales son `app.routes.ts` (las rutas de carga diferida se verifican por su configuración, no se navega a cada una) y `google-auth.service.ts` (carga del script externo de Google).
@@ -302,6 +341,7 @@ GitHub Actions (`.github/workflows/ci.yml`) ejecuta en cada push: compilación y
 
 | Versión | Contenido |
 |---|---|
+| `v1.3.0` | Ocupación de eventos en vivo por WebSocket (`/api/v1/ws`) con difusión entre procesos por Redis; gráfico en `/reportes`; login y registro rediseñados (ver contraseña, requisitos, errores sin superposición); formulario de eventos con calendario y hora en 24 h; nginx con *upgrade* de WebSocket |
 | `v1.2.0` | Imagen del backend de 1,15 GB a 689 MB; frontend sin root; compose de producción con límites, reinicio y logs rotados; pruebas de resistencia y caos; respuestas 503 ante saturación o caída; timeout del limitador; `trust proxy` de un salto; cobertura medida |
 | `v1.1.0` | Migración del frontend a Angular Material (tabla, paginador y notificaciones; menú desplegable; carga diferida de rutas) |
 | `v1.0.0` | CI, rate limiting con Redis, documentación OpenAPI y cierre del MVP |
