@@ -9,6 +9,7 @@ import { AuthService } from '../../core/auth.service';
 import { mensajeGlobal } from '../../core/error.interceptor';
 import { NotificationService } from '../../core/notification.service';
 import { GoogleButtonComponent } from './google-button.component';
+import { PasswordFieldComponent } from './password-field.component';
 
 @Component({
   selector: 'app-login',
@@ -20,6 +21,7 @@ import { GoogleButtonComponent } from './google-button.component';
     MatInputModule,
     MatButtonModule,
     GoogleButtonComponent,
+    PasswordFieldComponent,
   ],
   templateUrl: './login.component.html',
   styleUrl: './auth-form.css',

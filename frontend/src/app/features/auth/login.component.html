@@ -1,36 +1,42 @@
 <main class="pagina">
-  <mat-card>
+  <mat-card class="tarjeta">
     <mat-card-content>
-      <h1>Ingresar a CupoYa</h1>
+      <header class="cabecera">
+        <h1>Ingresar a CupoYa</h1>
+        <p class="subtitulo">Ingresá con tu email y contraseña.</p>
+      </header>
 
       @if (registrado() === '1') {
         <p class="ok" role="status">Cuenta creada. Ya podés ingresar.</p>
       }
 
       <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Email</mat-label>
-          <input matInput type="email" formControlName="email" autocomplete="email" />
+          <input
+            matInput
+            type="email"
+            formControlName="email"
+            autocomplete="email"
+            autocapitalize="none"
+            spellcheck="false"
+          />
           <mat-error>Ingresá un email válido.</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Contraseña</mat-label>
-          <input
-            matInput
-            type="password"
-            formControlName="password"
-            autocomplete="current-password"
-          />
-          <mat-error>Ingresá tu contraseña.</mat-error>
-        </mat-form-field>
+        <app-password-field
+          [control]="form.controls.password"
+          etiqueta="Contraseña"
+          autocomplete="current-password"
+          error="Ingresá tu contraseña."
+        />
 
-        <button mat-flat-button type="submit" [disabled]="loading()">
+        <button mat-flat-button type="submit" [disabled]="loading()" [attr.aria-busy]="loading()">
           {{ loading() ? 'Ingresando…' : 'Ingresar' }}
         </button>
       </form>
 
-      <p class="separador">o</p>
+      <p class="separador"><span>o</span></p>
       <app-google-button />
 
       <p class="pie">¿No tenés cuenta? <a routerLink="/registro">Registrate</a></p>
