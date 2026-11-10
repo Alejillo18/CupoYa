@@ -9,7 +9,14 @@ async function esperarHasta(condicion: () => boolean, ms = 1000): Promise<void> 
   }
 }
 
-function crear(opciones: { publish?: jest.Mock; subscribe?: jest.Mock } = {}) {
+function crear(
+  opciones: {
+    publish?: jest.Mock;
+    subscribe?: jest.Mock;
+    ahora?: () => number;
+    logIntervaloMs?: number;
+  } = {},
+) {
   const hub = { markChanged: jest.fn() };
   const emisor = new EventEmitter();
   const publisher = { publish: opciones.publish ?? jest.fn().mockResolvedValue(1) };
@@ -22,6 +29,8 @@ function crear(opciones: { publish?: jest.Mock; subscribe?: jest.Mock } = {}) {
   const bridge = new RedisOccupancyBridge(hub, publisher, subscriber, {
     canal: 'canal-test',
     reintentoMs: 5,
+    ahora: opciones.ahora,
+    logIntervaloMs: opciones.logIntervaloMs,
   });
   return {
     hub,
@@ -118,5 +127,76 @@ describe('RedisOccupancyBridge', () => {
     await bridge.stop();
 
     await expect(arranque).resolves.toBeUndefined();
+  });
+
+  describe('registro de fallos al publicar', () => {
+    const asentar = () => new Promise<void>((r) => setTimeout(r, 0));
+    let info: jest.SpyInstance;
+
+    beforeEach(() => {
+      info = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    });
+
+    function conReloj(publish: jest.Mock) {
+      let t = 0;
+      const base = crear({ publish, ahora: () => t, logIntervaloMs: 1000 });
+      return {
+        ...base,
+        avanzar: (ms: number) => {
+          t += ms;
+        },
+      };
+    }
+
+    it('registra el primer fallo y agrupa los siguientes dentro del intervalo', async () => {
+      const { bridge } = conReloj(jest.fn().mockRejectedValue(new Error('redis caído')));
+
+      bridge.eventChanged('e1');
+      bridge.eventChanged('e2');
+      bridge.eventChanged('e3');
+      await asentar();
+
+      expect(console.error).toHaveBeenCalledTimes(1);
+    });
+
+    it('pasado el intervalo vuelve a registrar e informa cuántos avisos se omitieron', async () => {
+      const { bridge, avanzar } = conReloj(jest.fn().mockRejectedValue(new Error('redis caído')));
+      bridge.eventChanged('e1');
+      bridge.eventChanged('e2');
+      bridge.eventChanged('e3');
+      await asentar();
+
+      avanzar(1000);
+      bridge.eventChanged('e4');
+      await asentar();
+
+      expect(console.error).toHaveBeenCalledTimes(2);
+      expect(String((console.error as jest.Mock).mock.calls[1][0])).toContain('y 2 más');
+    });
+
+    it('avisa una sola vez cuando Redis vuelve a responder', async () => {
+      const publish = jest.fn().mockRejectedValueOnce(new Error('redis caído')).mockResolvedValue(1);
+      const { bridge } = conReloj(publish);
+
+      bridge.eventChanged('e1');
+      await asentar();
+      bridge.eventChanged('e2');
+      await asentar();
+      bridge.eventChanged('e3');
+      await asentar();
+
+      expect(info).toHaveBeenCalledTimes(1);
+    });
+
+    it('sin fallos no registra nada', async () => {
+      const { bridge } = conReloj(jest.fn().mockResolvedValue(1));
+
+      bridge.eventChanged('e1');
+      bridge.eventChanged('e2');
+      await asentar();
+
+      expect(console.error).not.toHaveBeenCalled();
+      expect(info).not.toHaveBeenCalled();
+    });
   });
 });
