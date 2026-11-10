@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
-import { RawData, WebSocket } from 'ws';
+import { ClientOptions, RawData, WebSocket } from 'ws';
 import { TokenService } from '../../src/modules/auth/token.service';
 import { OccupancyHub, OccupancyRow } from '../../src/modules/realtime/occupancy.hub';
 import { attachRealtime, WS_PATH } from '../../src/modules/realtime/realtime.server';
@@ -35,8 +35,8 @@ describe('Servidor WebSocket de ocupación', () => {
   let url: string;
   const abiertos: WebSocket[] = [];
 
-  function conectar() {
-    const ws = new WebSocket(url);
+  function conectar(opciones?: ClientOptions) {
+    const ws = new WebSocket(url, opciones);
     abiertos.push(ws);
     const recibidos: any[] = [];
     const esperando: Array<(m: any) => void> = [];
@@ -195,6 +195,16 @@ describe('Servidor WebSocket de ocupación', () => {
     expect(await c.cierre).toBe(1009);
   });
 
+  it('cierra con 4401 cuando vence el token de una sesión ya autenticada', async () => {
+    const corto = new TokenService('x'.repeat(40), 2);
+    const c = conectar();
+    await c.abierto;
+    c.enviar({ type: 'auth', token: corto.signAccessToken({ id: 'u-admin', role: 'ADMIN' }) });
+    expect(await c.siguiente()).toEqual({ type: 'autenticado' });
+
+    expect(await c.cierre).toBe(4401);
+  });
+
   it('al cerrar el socket deja de seguir los eventos', async () => {
     const espia = jest.spyOn(hub, 'unsubscribe');
     const c = await conectarAdmin();
@@ -204,5 +214,44 @@ describe('Servidor WebSocket de ocupación', () => {
     c.ws.close();
 
     await esperarHasta(() => espia.mock.calls.length > 0);
+  });
+
+  describe('heartbeat', () => {
+    beforeEach(async () => {
+      await realtime.close();
+      realtime = attachRealtime(server, {
+        tokens,
+        hub,
+        authTimeoutMs: 200,
+        flushIntervalMs: 20,
+        heartbeatMs: 100,
+      });
+    });
+
+    it('manda pings periódicos y mantiene abierta la conexión de un cliente que responde', async () => {
+      const c = conectar();
+      let pings = 0;
+      c.ws.on('ping', () => pings++);
+      await c.abierto;
+      c.enviar({ type: 'auth', token: tokenAdmin() });
+      await c.siguiente();
+
+      await esperarHasta(() => pings >= 3, 1500);
+
+      expect(c.ws.readyState).toBe(WebSocket.OPEN);
+    });
+
+    it('termina la conexión de un cliente que no responde a los pings y lo deja de seguir', async () => {
+      const espia = jest.spyOn(hub, 'unsubscribe');
+      const c = conectar({ autoPong: false });
+      await c.abierto;
+      c.enviar({ type: 'auth', token: tokenAdmin() });
+      await c.siguiente();
+      c.enviar({ type: 'suscribir', eventIds: ['a'] });
+      await c.siguiente();
+
+      expect(await c.cierre).toBe(1006);
+      await esperarHasta(() => espia.mock.calls.length > 0);
+    });
   });
 });
