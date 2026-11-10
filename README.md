@@ -19,6 +19,7 @@ Proyecto académico desarrollado con **Programación Extrema (XP)** y **TDD**.
 | 7 | Interfaz con Angular Material | Completa (`v1.1.0`) |
 | 8 | Contenedores de producción y pruebas de resistencia | Completa (`v1.2.0`) |
 | 9 | Ocupación en vivo por WebSocket e interfaz renovada | Completa (`v1.3.0`) |
+| 10 | Robustez del tiempo real: vencimiento de sesión, *heartbeat* y prueba de carga | Completa (`v1.4.0`) |
 
 ## Stack
 
@@ -153,7 +154,9 @@ La pantalla `/reportes` (solo `ADMIN`) muestra la ocupación de hasta 5 eventos 
 
 Códigos de cierre: `4401` (token inválido o vencido: el frontend renueva la sesión una vez y reintenta) y `4403` (sin permiso: no es `ADMIN`). Ante una caída de la conexión, el frontend reconecta con espera exponencial y muestra el estado (*En vivo*, *Reconectando*, *Desconectado*).
 
-**Cómo escala:** cada worker del `cluster` mantiene su propio *hub* de conexiones. Cuando una reserva, una cancelación o la edición de un evento cambia la ocupación, el worker publica solo el **id del evento** en un canal de Redis; todos los workers reciben el aviso, leen el estado actual de la base y lo envían a sus clientes suscriptos. Así no se transmiten datos en el canal y un mensaje perdido se corrige con el siguiente. Si Redis falla, la reserva sigue funcionando (falla abierto) y solo se pierde la actualización en vivo. Se desactiva con `REALTIME_ENABLED=false`.
+El servidor también protege sus recursos: cierra con `4401` ("Sesión vencida") la conexión cuyo access token venció, y el frontend renueva la sesión y reconecta; y cada 30 s envía un `ping` y termina las conexiones que no responden con `pong` (red caída, equipo suspendido), para no acumular sockets muertos ni suscripciones colgadas.
+
+**Cómo escala:** cada worker del `cluster` mantiene su propio *hub* de conexiones. Cuando una reserva, una cancelación o la edición de un evento cambia la ocupación, el worker publica solo el **id del evento** en un canal de Redis; todos los workers reciben el aviso, leen el estado actual de la base y lo envían a sus clientes suscriptos. Así no se transmiten datos en el canal y un mensaje perdido se corrige con el siguiente. Si Redis falla, la reserva sigue funcionando (falla abierto) y solo se pierde la actualización en vivo; el puente registra como máximo un fallo cada 30 s (con la cantidad de avisos omitidos) y avisa cuando Redis se recupera. Se desactiva con `REALTIME_ENABLED=false`.
 
 Para observarla desde la terminal (usa el login de un admin; ver el encabezado del script):
 
@@ -305,14 +308,14 @@ TEST_REDIS_URL="redis://localhost:6379"
 
 > `node --env-file` **no pisa** las variables que ya existan en la terminal: si hay una `TEST_DATABASE_URL` exportada de antes, gana sobre el archivo. Ante un `Can't reach database server` inesperado, correr `unset TEST_DATABASE_URL TEST_REDIS_URL DATABASE_URL`.
 
-Estado actual: backend 290 unitarias y 53 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis, y el puente de ocupación por Redis pub/sub); frontend 294. Total: 637.
+Estado actual: backend 297 unitarias y 53 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis, y el puente de ocupación por Redis pub/sub); frontend 294. Total: 644.
 
 ### Cobertura de pruebas
 
 | Suite | Sentencias | Ramas | Funciones | Líneas |
 |---|---|---|---|---|
-| Backend, unitarias (290) | 94,86 % | 89,08 % | 92,00 % | 95,01 % |
-| Backend, integración (53) | 93,15 % | 80,00 % | 86,79 % | 93,52 % |
+| Backend, unitarias (297) | 95,03 % | 88,97 % | 92,30 % | 95,17 % |
+| Backend, integración (53) | 86,74 % | 77,58 % | 85,71 % | 86,70 % |
 | Frontend (294) | 94,11 % | 93,67 % | 85,66 % | 96,12 % |
 
 - Las de integración miden solo los archivos que ejercitan (repositorios, pool de reportes y limitador con Redis); se leen junto con las unitarias, no en su lugar.
@@ -344,6 +347,7 @@ GitHub Actions (`.github/workflows/ci.yml`) ejecuta en cada push: compilación y
 
 | Versión | Contenido |
 |---|---|
+| `v1.4.0` | El servidor de tiempo real cierra con 4401 las sesiones vencidas y detecta conexiones muertas con ping/pong; el puente de Redis limita el registro de fallos y avisa al recuperarse; prueba de carga con 200 administradores conectados por WebSocket (0 cierres inesperados, reservas p95 5,6 ms, memoria estable) |
 | `v1.3.0` | Ocupación de eventos en vivo por WebSocket (`/api/v1/ws`) con difusión entre procesos por Redis; gráfico en `/reportes`; login y registro rediseñados (ver contraseña, requisitos, errores sin superposición); formulario de eventos con calendario y hora en 24 h; nginx con *upgrade* de WebSocket |
 | `v1.2.0` | Imagen del backend de 1,15 GB a 689 MB; frontend sin root; compose de producción con límites, reinicio y logs rotados; pruebas de resistencia y caos; respuestas 503 ante saturación o caída; timeout del limitador; `trust proxy` de un salto; cobertura medida |
 | `v1.1.0` | Migración del frontend a Angular Material (tabla, paginador y notificaciones; menú desplegable; carga diferida de rutas) |
