@@ -19,6 +19,9 @@ export interface RedisSubscriber {
 export interface BridgeOptions {
   canal?: string;
   reintentoMs?: number;
+  // Con Redis caído cada reserva falla al publicar: se registra como máximo una vez por intervalo.
+  logIntervaloMs?: number;
+  ahora?: () => number;
 }
 
 // Reparte los avisos de cambio de ocupación entre todos los workers del cluster.
@@ -26,7 +29,12 @@ export interface BridgeOptions {
 export class RedisOccupancyBridge implements OccupancyNotifier {
   private readonly canal: string;
   private readonly reintentoMs: number;
+  private readonly logIntervaloMs: number;
+  private readonly ahora: () => number;
   private activo = false;
+  private ultimoRegistro = Number.NEGATIVE_INFINITY;
+  private omitidos = 0;
+  private enFalla = false;
 
   constructor(
     private readonly hub: Pick<OccupancyHub, 'markChanged'>,
@@ -36,6 +44,8 @@ export class RedisOccupancyBridge implements OccupancyNotifier {
   ) {
     this.canal = options.canal ?? CANAL_OCUPACION;
     this.reintentoMs = options.reintentoMs ?? 2000;
+    this.logIntervaloMs = options.logIntervaloMs ?? 30_000;
+    this.ahora = options.ahora ?? Date.now;
   }
 
   // Resuelve cuando la suscripción quedó hecha. Si Redis no está disponible,
@@ -62,9 +72,30 @@ export class RedisOccupancyBridge implements OccupancyNotifier {
   eventChanged(eventId: string): void {
     // El worker local se entera siempre, aunque Redis falle.
     this.hub.markChanged(eventId);
-    this.publisher.publish(this.canal, eventId).catch((err: unknown) => {
-      console.error('No se pudo publicar el aviso de ocupación:', err);
-    });
+    this.publisher.publish(this.canal, eventId).then(
+      () => this.alPublicar(),
+      (err: unknown) => this.alFallar(err),
+    );
+  }
+
+  private alFallar(err: unknown): void {
+    this.enFalla = true;
+    const ahora = this.ahora();
+    if (ahora - this.ultimoRegistro < this.logIntervaloMs) {
+      this.omitidos += 1;
+      return;
+    }
+    const resto = this.omitidos > 0 ? ` (y ${this.omitidos} más desde el último registro)` : '';
+    console.error(`No se pudo publicar el aviso de ocupación${resto}:`, err);
+    this.ultimoRegistro = ahora;
+    this.omitidos = 0;
+  }
+
+  private alPublicar(): void {
+    if (!this.enFalla) return;
+    this.enFalla = false;
+    this.omitidos = 0;
+    console.info('Redis volvió a responder: los avisos de ocupación se publican de nuevo.');
   }
 
   async stop(): Promise<void> {
