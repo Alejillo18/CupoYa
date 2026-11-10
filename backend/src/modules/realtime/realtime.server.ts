@@ -11,6 +11,9 @@ export const CIERRE_NO_AUTENTICADO = 4401;
 export const CIERRE_SIN_PERMISO = 4403;
 
 const TAMANO_MAXIMO_MENSAJE = 4096;
+const HEARTBEAT_MS = 30_000;
+// setTimeout no admite más de ~24,8 días; un token no dura tanto, pero no se arriesga.
+const MAXIMO_TIMER_MS = 2 ** 31 - 1;
 
 export interface RealtimeOptions {
   tokens: TokenService;
@@ -18,6 +21,7 @@ export interface RealtimeOptions {
   path?: string;
   authTimeoutMs?: number;
   flushIntervalMs?: number;
+  heartbeatMs?: number;
 }
 
 interface ClientMessage {
@@ -37,6 +41,17 @@ function leer(data: RawData): ClientMessage | undefined {
   return undefined;
 }
 
+// El token ya fue verificado: solo se lee de él cuándo vence (en milisegundos).
+function vencimientoDelToken(token: string): number | undefined {
+  try {
+    const carga: unknown = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString());
+    const exp = (carga as { exp?: unknown }).exp;
+    return typeof exp === 'number' ? exp * 1000 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Engancha el WebSocket de ocupación al servidor HTTP existente.
 // Solo los administradores pueden conectarse: el primer mensaje debe ser la autenticación.
 export function attachRealtime(
@@ -45,6 +60,9 @@ export function attachRealtime(
 ): { close(): Promise<void> } {
   const path = options.path ?? WS_PATH;
   const authTimeoutMs = options.authTimeoutMs ?? 5000;
+  const heartbeatMs = options.heartbeatMs ?? HEARTBEAT_MS;
+  // Un socket está "vivo" si respondió con pong desde el último ping.
+  const vivos = new WeakSet<WebSocket>();
   const wss = new WebSocketServer({ noServer: true, maxPayload: TAMANO_MAXIMO_MENSAJE });
 
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
@@ -53,13 +71,18 @@ export function attachRealtime(
       socket.destroy();
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => atender(ws));
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      vivos.add(ws);
+      ws.on('pong', () => vivos.add(ws));
+      atender(ws);
+    });
   };
   server.on('upgrade', onUpgrade);
 
   const atender = (ws: WebSocket): void => {
     const id = randomUUID();
     let autenticado = false;
+    let sesionVencida: NodeJS.Timeout | undefined;
 
     const enviar = (mensaje: unknown): void => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(mensaje));
@@ -89,6 +112,14 @@ export function attachRealtime(
       }
       autenticado = true;
       clearTimeout(vencimiento);
+      // Una sesión vencida no puede seguir recibiendo datos: se corta con el mismo
+      // código que un token inválido, y el cliente renueva la sesión y reconecta.
+      const venceEn = vencimientoDelToken(mensaje.token);
+      if (venceEn !== undefined) {
+        const restante = Math.min(Math.max(venceEn - Date.now(), 0), MAXIMO_TIMER_MS);
+        sesionVencida = setTimeout(() => ws.close(CIERRE_NO_AUTENTICADO, 'Sesión vencida'), restante);
+        sesionVencida.unref();
+      }
       enviar({ type: 'autenticado' });
     };
 
@@ -125,6 +156,7 @@ export function attachRealtime(
 
     ws.on('close', () => {
       clearTimeout(vencimiento);
+      clearTimeout(sesionVencida);
       options.hub.unsubscribe(id);
     });
 
@@ -137,9 +169,23 @@ export function attachRealtime(
   }, options.flushIntervalMs ?? 500);
   ciclo.unref();
 
+  // Detecta conexiones muertas (red caída, equipo suspendido) que nunca avisan que se fueron.
+  const latido = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (!vivos.has(ws)) {
+        ws.terminate();
+        continue;
+      }
+      vivos.delete(ws);
+      ws.ping();
+    }
+  }, heartbeatMs);
+  latido.unref();
+
   return {
     async close(): Promise<void> {
       clearInterval(ciclo);
+      clearInterval(latido);
       server.off('upgrade', onUpgrade);
       for (const cliente of wss.clients) cliente.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
