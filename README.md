@@ -197,7 +197,7 @@ npm run verify                          # comprueba que no hubo sobreventa
 
 ### Resistencia de punta a punta (nginx → API → PostgreSQL y Redis)
 
-Cuatro perfiles de k6 en `load-tests/e2e.js`, con usuarios sintéticos que listan eventos, reservan, cancelan y piden reportes, sobre un evento de 5.000 lugares y con los límites de producción:
+Cinco perfiles de k6 en `load-tests/e2e.js`, con usuarios sintéticos que listan eventos, reservan, cancelan y piden reportes, sobre un evento de 5.000 lugares y con los límites de producción:
 
 | Perfil | Qué hace | Resultado |
 |---|---|---|
@@ -205,6 +205,9 @@ Cuatro perfiles de k6 en `load-tests/e2e.js`, con usuarios sintéticos que lista
 | `rampa` | Sube hasta encontrar el techo | Techo del conjunto ≈ **800 VUs** con el frontend a 1,0 CPU (≈ 500 con 0,5 y ≈ 1.000 con 2,0); sin errores, se degrada por latencia |
 | `spike` | Salto a 2.000 VUs | Tras el pico vuelve a p95 8,6 ms con 0 errores; los errores del pico salen como 503 `SERVICIO_SATURADO` |
 | `soak` | 29 min a 150 VUs | 246 mil peticiones, 0 errores, p95 9,3 ms; memoria del backend estable |
+| `ws` | Como `mixta` (5 min) más 200 administradores con el WebSocket abierto | 200 de 200 conexiones, 0 cierres inesperados ni errores de protocolo; autenticación y primer estado en p95 ≤ 2 ms; ≈ 350 avisos/s (107.744 en total, todos los sockets recibieron); reserva p95 5,6 ms y 0 errores; memoria del backend estable (≈ 225 → 270 MB y vuelve a 257 MB al cerrar los sockets) |
+
+> En Linux, `host.docker.internal` no se resuelve por defecto: correr k6 dentro de la red de Compose, por ejemplo `docker run --rm -i --network cupoya_default -e FASE=ws -e BASE_URL=http://frontend:8080 -v "$PWD:/scripts" -w /scripts grafana/k6 run e2e.js`. La fase `ws` usa el token del administrador de carga para los 200 sockets (`WS_CLIENTES` cambia la cantidad).
 
 Tras cada corrida, `npm run verify` comprueba la **integridad**: sin sobreventa, nadie con más de 4 lugares y `disponibles + confirmados = total`. Se cumplió en todas las corridas, incluso después de matar a la fuerza el backend y la base.
 
@@ -225,7 +228,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 
 cd load-tests
 npm run preparar                    # usuarios, tokens y evento de 5.000 lugares
-docker run --rm -i -v "${PWD}:/scripts" -w /scripts -e FASE=mixta grafana/k6 run --quiet e2e.js   # mixta | rampa | spike | soak
+docker run --rm -i -v "${PWD}:/scripts" -w /scripts -e FASE=mixta grafana/k6 run --quiet e2e.js   # mixta | rampa | spike | soak | ws
 npm run verify
 cd ..
 
