@@ -3,11 +3,14 @@ import exec from 'k6/execution';
 import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
 import { Counter, Rate, Trend } from 'k6/metrics';
+import { WebSocket } from 'k6/websockets';
 
 const data = new SharedArray('data', () => [JSON.parse(open('./data.json'))]);
 const { eventId, tokens, adminToken } = data[0];
 
 const BASE = __ENV.BASE_URL || 'http://host.docker.internal:8080';
+const WS_URL = BASE.replace(/^http/, 'ws') + '/api/v1/ws';
+const WS_CLIENTES = Number(__ENV.WS_CLIENTES) || 200;
 const FASE = __ENV.FASE || 'mixta';
 
 // 4xx son respuestas de negocio válidas (cupo agotado, límite por usuario...).
@@ -24,14 +27,25 @@ const reportesListos = new Counter('reportes_completados');
 const reportesFallidos = new Counter('reportes_fallidos');
 const reporteTiempo = new Trend('reporte_tiempo_ms', true);
 
+// Tiempo real (fase "ws"): administradores mirando la ocupación mientras otros reservan
+const wsExito = new Rate('ws_conexion_ok'); // llegó a "autenticado" y recibió su snapshot
+const wsAuthMs = new Trend('ws_auth_ms', true); // auth enviado -> autenticado
+const wsSnapshotMs = new Trend('ws_snapshot_ms', true); // suscribir enviado -> snapshot
+const wsAvisos = new Counter('ws_avisos_ocupacion');
+const wsRecibioAvisos = new Rate('ws_recibio_avisos'); // por socket: al menos un aviso
+const wsCierres = new Counter('ws_cierres_inesperados');
+const wsErrores = new Counter('ws_errores_protocolo');
+
 // [segundos, VUs objetivo]
 const PERFILES = {
   mixta: [[60, 200], [180, 200], [60, 0]],
   rampa: [200, 400, 600, 800, 1000, 1200, 1500, 1800].flatMap((t) => [[30, t], [60, t]]),
   spike: [[30, 50], [10, 2000], [60, 2000], [10, 50], [60, 50], [10, 0]],
   soak: [[120, 150], [1500, 150], [120, 0]],
+  // Misma carga que la mixta, más WS_CLIENTES administradores con el WebSocket abierto
+  ws: [[60, 200], [180, 200], [60, 0]],
 };
-if (!PERFILES[FASE]) throw new Error(`FASE desconocida: ${FASE} (mixta | rampa | spike | soak)`);
+if (!PERFILES[FASE]) throw new Error(`FASE desconocida: ${FASE} (mixta | rampa | spike | soak | ws)`);
 
 const stages = PERFILES[FASE].map(([s, t]) => ({ duration: `${s}s`, target: t }));
 const total = PERFILES[FASE].reduce((acc, [s]) => acc + s, 0);
@@ -45,12 +59,22 @@ const escenarios = {
     gracefulStop: '30s',
   },
 };
-if (FASE === 'mixta' || FASE === 'soak') {
+const conReportes = FASE === 'mixta' || FASE === 'soak' || FASE === 'ws';
+if (conReportes) {
   escenarios.reportes = {
     executor: 'constant-vus',
     vus: 1,
     duration: `${total}s`,
     exec: 'admin',
+  };
+}
+if (FASE === 'ws') {
+  escenarios.sockets = {
+    executor: 'per-vu-iterations',
+    vus: WS_CLIENTES,
+    iterations: 1,
+    maxDuration: `${total + 60}s`,
+    exec: 'monitor',
   };
 }
 
@@ -60,11 +84,21 @@ const umbrales = {
   'http_req_duration{tipo:lectura}': ['p(95)<500'],
   'http_req_duration{tipo:reserva}': ['p(95)<800'],
 };
-if (FASE === 'mixta' || FASE === 'soak') {
+if (conReportes) {
   // El módulo de reportes (worker_threads) también tiene que funcionar bajo carga
   umbrales.reportes_completados = ['count>0'];
   umbrales.reportes_fallidos = ['count==0'];
   umbrales.reporte_tiempo_ms = ['p(95)<5000'];
+}
+if (FASE === 'ws') {
+  // Lo importante: con los sockets abiertos, las reservas no se degradan
+  umbrales['http_req_duration{tipo:reserva}'] = ['p(95)<100'];
+  umbrales.ws_conexion_ok = ['rate>0.99'];
+  umbrales.ws_auth_ms = ['p(95)<500'];
+  umbrales.ws_snapshot_ms = ['p(95)<1000'];
+  umbrales.ws_cierres_inesperados = ['count==0'];
+  umbrales.ws_errores_protocolo = ['count==0'];
+  umbrales.ws_recibio_avisos = ['rate>0.99'];
 }
 if (FASE === 'rampa') {
   // Corta sola al romperse: el escalón en que corta es el punto de quiebre
@@ -247,4 +281,60 @@ export function admin() {
     reportesFallidos.add(1); // aceptado, pero la respuesta no trae el id esperado
   }
   sleep(25);
+}
+
+// Un administrador mirando la ocupación en vivo: conecta, se autentica, sigue el evento
+// de carga y se queda recibiendo avisos hasta casi el final de la prueba.
+export function monitor() {
+  sleep(Math.random() * 20); // las conexiones se reparten en 20 s
+  const finMs = (total - 20) * 1000;
+  const restante = finMs - exec.instance.currentTestRunDuration;
+  if (restante <= 0) return;
+
+  const ws = new WebSocket(WS_URL);
+  let cerrando = false;
+  let autenticado = false;
+  let snapshot = false;
+  let avisos = 0;
+  let tAuth = 0;
+  let tSuscripcion = 0;
+
+  ws.onopen = () => {
+    tAuth = Date.now();
+    ws.send(JSON.stringify({ type: 'auth', token: adminToken }));
+  };
+
+  ws.onmessage = (e) => {
+    const m = json({ json: () => JSON.parse(e.data) });
+    if (!m) return;
+    if (m.type === 'autenticado') {
+      autenticado = true;
+      wsAuthMs.add(Date.now() - tAuth);
+      tSuscripcion = Date.now();
+      ws.send(JSON.stringify({ type: 'suscribir', eventIds: [eventId] }));
+    } else if (m.type === 'snapshot') {
+      if (!snapshot) wsSnapshotMs.add(Date.now() - tSuscripcion);
+      snapshot = true;
+    } else if (m.type === 'ocupacion') {
+      avisos += 1;
+      wsAvisos.add(1);
+    } else if (m.type === 'error') {
+      wsErrores.add(1);
+    }
+  };
+
+  ws.onerror = () => {
+    if (!cerrando) wsCierres.add(1);
+  };
+
+  ws.onclose = () => {
+    if (!cerrando) wsCierres.add(1); // el servidor (o la red) cortó antes de tiempo
+    wsExito.add(autenticado && snapshot);
+    wsRecibioAvisos.add(avisos > 0);
+  };
+
+  setTimeout(() => {
+    cerrando = true;
+    ws.close();
+  }, restante);
 }
