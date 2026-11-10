@@ -14,12 +14,14 @@ import { AuthService } from './core/auth.service';
 import { ConfigService } from './core/config.service';
 import { errorInterceptor } from './core/error.interceptor';
 import { PaginatorEs } from './core/paginator-es';
+import { reintentoInterceptor } from './core/retry.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+    // El reintento va último: si una lectura se recupera al segundo intento, el aviso de error ni aparece.
+    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor, reintentoInterceptor])),
     provideAppInitializer(() => firstValueFrom(inject(ConfigService).load())),
     provideAppInitializer(() => firstValueFrom(inject(AuthService).restoreSession())),
     { provide: MatPaginatorIntl, useClass: PaginatorEs },
