@@ -20,6 +20,7 @@ Proyecto académico desarrollado con **Programación Extrema (XP)** y **TDD**.
 | 8 | Contenedores de producción y pruebas de resistencia | Completa (`v1.2.0`) |
 | 9 | Ocupación en vivo por WebSocket e interfaz renovada | Completa (`v1.3.0`) |
 | 10 | Robustez del tiempo real: vencimiento de sesión, *heartbeat* y prueba de carga | Completa (`v1.4.0`) |
+| 11 | Resiliencia del cliente ante saturación (503) y revisión de dependencias | Completa (`v1.5.0`) |
 
 ## Stack
 
@@ -136,6 +137,8 @@ Ante una sobrecarga o una falla de infraestructura, la API y nginx responden con
 | `SERVICIO_NO_DISPONIBLE` | La base está caída o arrancando, o nginx no alcanza al backend | 2 s |
 
 Los pedidos que fallan así no se aplicaron o se pueden repetir sin riesgo: las reservas llevan `Idempotency-Key` y la cancelación es idempotente.
+
+El frontend traduce cada código a un mensaje claro y reintenta **una sola vez** las lecturas (GET) que fallan así, esperando lo que indique `Retry-After` (1 s si falta, con tope de 5 s); si el reintento funciona, la persona no ve ningún error. Las escrituras no se repiten solas: la reserva conserva su `Idempotency-Key` ante errores 5xx, de modo que repetirla a mano es seguro.
 
 ## Ocupación en vivo (WebSocket)
 
@@ -256,6 +259,7 @@ Los resultados dependen del equipo; la consistencia (cero sobreventa) es lo que 
 - Autorización por roles (`USUARIO`, `OPERADOR`, `ADMIN`) con middlewares `authenticate` y `authorize`, y guards en Angular.
 - El CSV de reportes neutraliza textos que una planilla interpretaría como fórmulas.
 - Contenedores de producción sin privilegios (frontend sin root, `no-new-privileges`, `cap_drop: ALL`) y sin puertos de base ni Redis expuestos.
+- **Dependencias:** `npm audit --omit=dev` sin vulnerabilidades en el frontend. En el backend queda una alta en `deepmerge-ts`, dependencia de la CLI de Prisma (agotamiento de pila al fusionar objetos recursivos): solo se ejecuta al cargar la configuración de la CLI, nunca con datos de usuarios, y corregirla exige migrar a Prisma 7. Es un riesgo aceptado hasta esa migración.
 
 ## Desarrollo local
 
@@ -308,7 +312,7 @@ TEST_REDIS_URL="redis://localhost:6379"
 
 > `node --env-file` **no pisa** las variables que ya existan en la terminal: si hay una `TEST_DATABASE_URL` exportada de antes, gana sobre el archivo. Ante un `Can't reach database server` inesperado, correr `unset TEST_DATABASE_URL TEST_REDIS_URL DATABASE_URL`.
 
-Estado actual: backend 297 unitarias y 53 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis, y el puente de ocupación por Redis pub/sub); frontend 294. Total: 644.
+Estado actual: backend 297 unitarias y 53 de integración (incluye concurrencia real contra PostgreSQL, un hilo real de `worker_threads` y Redis, y el puente de ocupación por Redis pub/sub); frontend 304. Total: 654.
 
 ### Cobertura de pruebas
 
@@ -316,7 +320,7 @@ Estado actual: backend 297 unitarias y 53 de integración (incluye concurrencia 
 |---|---|---|---|---|
 | Backend, unitarias (297) | 95,03 % | 88,97 % | 92,30 % | 95,17 % |
 | Backend, integración (53) | 86,74 % | 77,58 % | 85,71 % | 86,70 % |
-| Frontend (294) | 94,11 % | 93,67 % | 85,66 % | 96,12 % |
+| Frontend (304) | 94,20 % | 93,75 % | 85,97 % | 96,19 % |
 
 - Las de integración miden solo los archivos que ejercitan (repositorios, pool de reportes y limitador con Redis); se leen junto con las unitarias, no en su lugar.
 - En el frontend, la cobertura de funciones baja porque V8 cuenta como funciones los manejadores de eventos de las plantillas HTML. Los puntos bajos reales son `app.routes.ts` (las rutas de carga diferida se verifican por su configuración, no se navega a cada una) y `google-auth.service.ts` (carga del script externo de Google).
@@ -347,6 +351,7 @@ GitHub Actions (`.github/workflows/ci.yml`) ejecuta en cada push: compilación y
 
 | Versión | Contenido |
 |---|---|
+| `v1.5.0` | Mensajes específicos ante saturación y caída momentánea del servicio (503); reintento único de las lecturas con `Retry-After`; `qs` actualizado para corregir una vulnerabilidad moderada; riesgo aceptado documentado para la dependencia de la CLI de Prisma |
 | `v1.4.0` | El servidor de tiempo real cierra con 4401 las sesiones vencidas y detecta conexiones muertas con ping/pong; el puente de Redis limita el registro de fallos y avisa al recuperarse; prueba de carga con 200 administradores conectados por WebSocket (0 cierres inesperados, reservas p95 5,6 ms, memoria estable) |
 | `v1.3.0` | Ocupación de eventos en vivo por WebSocket (`/api/v1/ws`) con difusión entre procesos por Redis; gráfico en `/reportes`; login y registro rediseñados (ver contraseña, requisitos, errores sin superposición); formulario de eventos con calendario y hora en 24 h; nginx con *upgrade* de WebSocket |
 | `v1.2.0` | Imagen del backend de 1,15 GB a 689 MB; frontend sin root; compose de producción con límites, reinicio y logs rotados; pruebas de resistencia y caos; respuestas 503 ante saturación o caída; timeout del limitador; `trust proxy` de un salto; cobertura medida |
