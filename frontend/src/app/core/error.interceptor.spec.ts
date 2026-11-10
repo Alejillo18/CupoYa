@@ -24,10 +24,10 @@ describe('errorInterceptor', () => {
 
   afterEach(() => ctrl.verify());
 
-  function fallar(status: number, statusText = '') {
+  function fallar(status: number, statusText = '', code = 'X') {
     let recibido: unknown;
     http.get('/api/v1/x').subscribe({ error: (e) => (recibido = e) });
-    ctrl.expectOne('/api/v1/x').flush({ error: { code: 'X' } }, { status, statusText });
+    ctrl.expectOne('/api/v1/x').flush({ error: { code } }, { status, statusText });
     return recibido;
   }
 
@@ -45,6 +45,16 @@ describe('errorInterceptor', () => {
   it.each([500, 502, 503])('avisa ante %i', (status) => {
     fallar(status);
     expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('servidor'));
+  });
+
+  it('explica la saturación cuando la API responde SERVICIO_SATURADO', () => {
+    fallar(503, 'Service Unavailable', 'SERVICIO_SATURADO');
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('mucha demanda'));
+  });
+
+  it('explica la caída momentánea cuando la API responde SERVICIO_NO_DISPONIBLE', () => {
+    fallar(503, 'Service Unavailable', 'SERVICIO_NO_DISPONIBLE');
+    expect(notif.error).toHaveBeenCalledWith(expect.stringContaining('no está disponible'));
   });
 
   it.each([400, 401, 403, 404, 409, 423])('no avisa ante %i (lo maneja cada pantalla)', (status) => {
